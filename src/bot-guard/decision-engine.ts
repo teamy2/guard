@@ -97,6 +97,14 @@ export async function callAiClassifier(features: RequestFeatures, config: BotGua
 
         console.log('[DecisionEngine] Calling AI Classifier:', aiUrl);
 
+        // Debug URL validity
+        try {
+            const u = new URL(aiUrl);
+            console.log('[DecisionEngine] Parsed AI URL:', u.toString());
+        } catch (e) {
+            console.error('[DecisionEngine] Invalid AI URL string:', aiUrl);
+        }
+
         const response = await fetch(aiUrl, {
             method: 'POST',
             headers: {

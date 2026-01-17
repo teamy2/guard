@@ -118,6 +118,7 @@ export async function extractFeatures(
     request: Request,
     ipSalt: string
 ): Promise<RequestFeatures> {
+    console.log('[FeatureExtractor] parsing URL:', request.url);
     const url = new URL(request.url);
     const clientIP = getClientIP(request);
     const headerInfo = getHeaderInfo(request);

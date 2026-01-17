@@ -103,10 +103,19 @@ export async function handleRequest(
     const sampleRate = config.telemetrySampleRate;
     const shouldEmitTelemetry = shouldSample(sampleRate);
 
+    // Log URL for debugging
+    console.log('[Balancer] request URL:', request.url);
+    let pathname = '/unknown';
+    try {
+        pathname = new URL(request.url).pathname;
+    } catch (e) {
+        console.error('[Balancer] Invalid URL:', request.url, e);
+    }
+
     // Start Sentry transaction
     return Sentry.startSpan(
         {
-            name: `edge.balancer ${request.method} ${new URL(request.url).pathname}`,
+            name: `edge.balancer ${request.method} ${pathname}`,
             op: 'http.server',
         },
         async (span) => {

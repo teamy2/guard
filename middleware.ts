@@ -7,6 +7,7 @@ import { loadConfig } from '@/config';
 export const runtime = 'edge';
 
 export async function middleware(request: NextRequest) {
+    console.log('[Middleware] request.url:', request.url);
     const path = new URL(request.url).pathname;
 
     // Skip excluded paths
