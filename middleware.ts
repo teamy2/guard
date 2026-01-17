@@ -48,12 +48,9 @@ export const config = {
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - public folder
-         * - internal (admin routes)
-         * - api/auth (auth routes)
-         * - api/cron (cron jobs)
-         * - api/health (internal health check)
+         * - internal (all internal routes including admin, API, cron, health)
          * - challenge (challenge page)
          */
-        '/((?!_next/static|_next/image|favicon.ico|internal|sentry-example-page|api/auth|api/cron|api/health|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|internal|sentry-example-page|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 };

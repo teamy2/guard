@@ -36,7 +36,7 @@ export default function DashboardPage() {
 
     useEffect(() => {
         // Fetch dashboard stats
-        fetch('/api/metrics/stats?hours=1')
+        fetch('/internal/api/metrics/stats?hours=1')
             .then(res => res.json())
             .then(data => {
                 setStats({

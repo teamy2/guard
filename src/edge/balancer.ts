@@ -482,11 +482,11 @@ function recordMetric(
     baseUrl?: string
 ): void {
     // Construct absolute URL for metrics endpoint
-    let metricsUrl = '/api/metrics/record';
+    let metricsUrl = '/internal/api/metrics/record';
     if (baseUrl) {
         try {
             const url = new URL(baseUrl);
-            metricsUrl = `${url.protocol}//${url.host}/api/metrics/record`;
+            metricsUrl = `${url.protocol}//${url.host}/internal/api/metrics/record`;
         } catch {
             // Fallback to relative URL if parsing fails
         }
@@ -520,10 +520,9 @@ function recordMetric(
 export function shouldExcludePath(path: string): boolean {
     const excludedPatterns = [
         /^\/_next\//,           // Next.js internal
-        /^\/api\/health$/,      // Health check
         /^\/favicon\.ico$/,     // Favicon
         /^\/robots\.txt$/,      // Robots
-        /^\/internal/,          // Admin routes
+        /^\/internal/,          // All internal routes (admin, API, cron, health, etc.)
         /^\/challenge/,         // Challenge page
     ];
 
