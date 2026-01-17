@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { initializeDatabase } from '../src/config/storage';
 
 async function main() {
