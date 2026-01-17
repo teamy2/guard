@@ -1,5 +1,19 @@
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 import type { RateLimitConfig, RequestFeatures } from '@/config/schema';
+
+// Create Redis client from environment safely
+// Supports both REDIS_URL and KV_REST_API_URL/TOKEN
+function createRedisClient() {
+    const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    if (url && token) {
+        return new Redis({ url, token });
+    }
+    return null;
+}
+
+const redis = createRedisClient();
 
 /**
  * Rate limit result
@@ -42,7 +56,7 @@ function generateKey(
 }
 
 /**
- * Sliding window rate limiter using Vercel KV
+ * Sliding window rate limiter using Vercel KV / Upstash Redis
  * Uses a simple counter with TTL approach for efficiency
  */
 export async function checkRateLimit(
@@ -64,8 +78,20 @@ export async function checkRateLimit(
     const windowSeconds = Math.ceil(config.windowMs / 1000);
 
     try {
+        if (!redis) {
+            // Fail open if Redis not configured
+            console.warn('[RateLimiter] Redis not configured, failing open');
+            return {
+                allowed: true,
+                remaining: config.maxRequests,
+                resetAt: Date.now() + config.windowMs,
+                keyType: config.keyType,
+                key,
+            };
+        }
+
         // Increment counter and get new value
-        const pipeline = kv.pipeline();
+        const pipeline = redis.pipeline();
         pipeline.incr(key);
         pipeline.ttl(key);
 
@@ -75,7 +101,7 @@ export async function checkRateLimit(
 
         // Set TTL on first request in window
         if (ttl === -1) {
-            await kv.expire(key, windowSeconds);
+            await redis.expire(key, windowSeconds);
         }
 
         const remaining = Math.max(0, config.maxRequests - count);
@@ -115,10 +141,12 @@ export async function getRequestCount(
     config: RateLimitConfig,
     policyId: string
 ): Promise<number> {
+    if (!redis) return 0;
+
     const key = generateKey(features, config, policyId);
 
     try {
-        const count = await kv.get<number>(key);
+        const count = await redis.get<number>(key);
         return count ?? 0;
     } catch {
         return 0;
@@ -131,7 +159,8 @@ export async function getRequestCount(
 export async function resetRateLimit(
     key: string
 ): Promise<void> {
-    await kv.del(key);
+    if (!redis) return;
+    await redis.del(key);
 }
 
 /**

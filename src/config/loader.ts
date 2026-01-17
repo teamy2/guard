@@ -1,9 +1,22 @@
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 import type { GlobalConfig } from './schema';
 import { getActiveConfig as getActiveConfigFromDB } from './storage';
 
 const CONFIG_CACHE_KEY = 'lb:config:active';
 const CONFIG_CACHE_TTL = 60; // 1 minute cache
+
+// Create Redis client safely
+function createRedisClient() {
+    const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    if (url && token) {
+        return new Redis({ url, token });
+    }
+    return null;
+}
+
+const redis = createRedisClient();
 
 /**
  * Configuration loader with caching for Edge runtime
@@ -11,8 +24,16 @@ const CONFIG_CACHE_TTL = 60; // 1 minute cache
  */
 export async function loadConfig(): Promise<GlobalConfig> {
     try {
-        // Try to get from KV cache first
-        const cached = await kv.get<GlobalConfig>(CONFIG_CACHE_KEY);
+        let cached: GlobalConfig | null = null;
+
+        // Try to get from KV cache first if available
+        if (redis) {
+            try {
+                cached = await redis.get<GlobalConfig>(CONFIG_CACHE_KEY);
+            } catch (e) {
+                console.warn('[ConfigLoader] KV cache error:', e);
+            }
+        }
 
         if (cached) {
             return cached;
@@ -22,7 +43,13 @@ export async function loadConfig(): Promise<GlobalConfig> {
         const config = await getActiveConfigFromDB();
 
         // Cache in KV for fast edge access
-        await kv.set(CONFIG_CACHE_KEY, config, { ex: CONFIG_CACHE_TTL });
+        if (redis) {
+            try {
+                await redis.set(CONFIG_CACHE_KEY, config, { ex: CONFIG_CACHE_TTL });
+            } catch (e) {
+                console.warn('[ConfigLoader] Failed to cache config:', e);
+            }
+        }
 
         return config;
     } catch (error) {
@@ -62,7 +89,9 @@ export async function loadConfig(): Promise<GlobalConfig> {
  * Invalidate the config cache (called after admin updates)
  */
 export async function invalidateConfigCache(): Promise<void> {
-    await kv.del(CONFIG_CACHE_KEY);
+    if (redis) {
+        await redis.del(CONFIG_CACHE_KEY);
+    }
 }
 
 /**
@@ -70,5 +99,7 @@ export async function invalidateConfigCache(): Promise<void> {
  */
 export async function warmConfigCache(): Promise<void> {
     const config = await getActiveConfigFromDB();
-    await kv.set(CONFIG_CACHE_KEY, config, { ex: CONFIG_CACHE_TTL });
+    if (redis) {
+        await redis.set(CONFIG_CACHE_KEY, config, { ex: CONFIG_CACHE_TTL });
+    }
 }
