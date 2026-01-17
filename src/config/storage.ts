@@ -199,7 +199,7 @@ export async function getBackendHealth(backendId: string): Promise<BackendHealth
 
 export interface RequestMetric {
   requestId: string;
-  timestamp?: Date;
+  timestamp?: string | Date; // ISO string or Date object
   decision: 'allow' | 'block' | 'challenge' | 'throttle' | 'reroute';
   path?: string;
   method?: string;
@@ -215,6 +215,11 @@ export interface RequestMetric {
  */
 export async function recordRequestMetric(metric: RequestMetric): Promise<void> {
   try {
+    // Convert timestamp to ISO string if it's a Date object
+    const timestamp = metric.timestamp 
+      ? (metric.timestamp instanceof Date ? metric.timestamp.toISOString() : metric.timestamp)
+      : new Date().toISOString();
+
     await sql`
       INSERT INTO request_metrics (
         request_id,
@@ -230,7 +235,7 @@ export async function recordRequestMetric(metric: RequestMetric): Promise<void> 
       )
       VALUES (
         ${metric.requestId},
-        ${metric.timestamp || new Date()},
+        ${timestamp},
         ${metric.decision},
         ${metric.path || null},
         ${metric.method || null},
