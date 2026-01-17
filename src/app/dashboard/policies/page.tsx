@@ -79,25 +79,43 @@ export default function PoliciesPage() {
     const [apiKey, setApiKey] = useState('');
 
     useEffect(() => {
-        fetchConfig();
+        // Initial load (public or cached check)
+        // fetchConfig();
     }, []);
 
-    const fetchConfig = async () => {
+    const fetchConfig = async (key?: string) => {
+        setLoading(true);
+        setError('');
         try {
-            const res = await fetch('/api/admin/config');
+            const headers: Record<string, string> = {};
+            if (key) {
+                headers['Authorization'] = `Bearer ${key}`;
+            }
+
+            const res = await fetch('/api/admin/config', { headers });
+
+            if (!res.ok) {
+                if (res.status === 401) {
+                    throw new Error('Unauthorized: Please provide a valid Admin API Key');
+                }
+                throw new Error(`Failed to load config: ${res.statusText}`);
+            }
+
             const data = await res.json();
             if (data.config) {
                 setConfig(data.config);
+                setSuccess('Configuration loaded successfully');
             }
-            setLoading(false);
-        } catch {
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Failed to load config');
+        } finally {
             setLoading(false);
         }
     };
 
     const handleSave = async () => {
         if (!apiKey) {
-            setError('API key is required');
+            setError('API key is required to save');
             return;
         }
 
@@ -190,20 +208,40 @@ export default function PoliciesPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
                         Policies
                     </h1>
                     <p className="text-gray-400 mt-1">Manage route policies and configuration</p>
                 </div>
+
                 <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="password"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            placeholder="Admin API Key"
+                            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 w-48"
+                        />
+                        <button
+                            onClick={() => fetchConfig(apiKey)}
+                            disabled={loading || !apiKey}
+                            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+                        >
+                            Load
+                        </button>
+                    </div>
+
+                    <div className="h-6 w-px bg-gray-800 mx-1"></div>
+
                     <span className="text-sm text-gray-400">
                         v<code className="bg-gray-800 px-2 py-0.5 rounded">{config.version}</code>
                     </span>
                     <span className={`px-2 py-1 rounded text-xs ${config.status === 'active'
-                            ? 'bg-green-500/20 text-green-400'
-                            : 'bg-yellow-500/20 text-yellow-400'
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-yellow-500/20 text-yellow-400'
                         }`}>
                         {config.status}
                     </span>
@@ -217,8 +255,8 @@ export default function PoliciesPage() {
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === tab
-                                ? 'bg-blue-500 text-white'
-                                : 'text-gray-400 hover:text-white'
+                            ? 'bg-blue-500 text-white'
+                            : 'text-gray-400 hover:text-white'
                             }`}
                     >
                         {tab.charAt(0).toUpperCase() + tab.slice(1)}
