@@ -352,6 +352,7 @@ export async function handleRequest(
                 const err = error instanceof Error ? error : new Error(String(error));
 
                 Sentry.captureException(err);
+                await Sentry.flush(2000);
 
                 return new Response(
                     JSON.stringify({

@@ -32,6 +32,7 @@ export async function middleware(request: NextRequest) {
         // Capture error and fail open
         Sentry.captureException(error);
         console.error('[Middleware] Error:', error);
+        await Sentry.flush(2000);
 
         return NextResponse.next();
     }
