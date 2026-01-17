@@ -6,10 +6,33 @@ import * as Sentry from '@sentry/nextjs';
 export const runtime = 'nodejs'; // Must be Node.js for Postgres
 
 /**
+ * Verify metrics API key
+ */
+function verifyMetricsAuth(request: NextRequest): boolean {
+    const authHeader = request.headers.get('authorization');
+    const apiKey = process.env.METRICS_API_KEY;
+
+    if (!apiKey) {
+        // In development, allow if no key is set
+        return process.env.NODE_ENV === 'development';
+    }
+
+    return authHeader === `Bearer ${apiKey}`;
+}
+
+/**
  * POST - Record a request metric
  * Called from edge runtime after processing requests
  */
 export async function POST(request: NextRequest) {
+  // Verify API key
+  if (!verifyMetricsAuth(request)) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await request.json() as RequestMetric;
 

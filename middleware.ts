@@ -44,11 +44,30 @@ const authMiddleware = neonAuthMiddleware({
     loginUrl: "/internal/auth/sign-in",
 });
 
+/**
+ * Verify metrics API key
+ */
+function verifyMetricsAuth(request: NextRequest): boolean {
+    const authHeader = request.headers.get('authorization');
+    const apiKey = process.env.METRICS_API_KEY;
+
+    if (!apiKey) {
+        return false;
+    }
+
+    return authHeader === `Bearer ${apiKey}`;
+}
+
 export async function middleware(request: NextRequest, event: any) {
     const path = new URL(request.url).pathname;
 
     // Only run auth middleware for /internal/ paths
     if (path.startsWith('/internal/')) {
+        // Allow metrics endpoint to bypass auth if valid API key is provided
+        if (path === '/internal/api/metrics/record' && verifyMetricsAuth(request)) {
+            return NextResponse.next();
+        }
+
         // Run auth middleware
         // Note: neonAuthMiddleware returns a NextMiddleware which takes request and event
         const authRes = await authMiddleware(request);

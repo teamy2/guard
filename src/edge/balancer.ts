@@ -481,6 +481,13 @@ function recordMetric(
     },
     baseUrl?: string
 ): void {
+    // Get API key from environment
+    const apiKey = process.env.METRICS_API_KEY;
+    if (!apiKey) {
+        // Silently skip if no API key configured
+        return;
+    }
+
     // Construct absolute URL for metrics endpoint
     let metricsUrl = '/internal/api/metrics/record';
     if (baseUrl) {
@@ -495,7 +502,10 @@ function recordMetric(
     // Fire and forget - don't block response
     fetch(metricsUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
         body: JSON.stringify({
             requestId: data.requestId,
             timestamp: new Date().toISOString(),
