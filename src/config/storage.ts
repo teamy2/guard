@@ -265,7 +265,7 @@ export async function getDashboardStats(hours: number = 1): Promise<{
   avgLatency: number;
   decisionDistribution: Record<string, number>;
 }> {
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
   // Get total counts by decision
   const decisionCounts = await sql`
@@ -335,7 +335,7 @@ export async function getBotStats(hours: number = 1): Promise<{
   topReasons: { rule: string; count: number; percentage: number }[];
   actions: Record<string, number>;
 }> {
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
   // Get counts by bot bucket
   const bucketCounts = await sql`
