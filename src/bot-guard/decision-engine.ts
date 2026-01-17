@@ -1,5 +1,6 @@
 import type { RequestFeatures, BotScoringResult, BotGuardConfig } from '@/config/schema';
 import { evaluateBotScore, checkAllowBlockLists } from './heuristics';
+import * as Sentry from '@sentry/nextjs';
 
 /**
  * AI Classifier response type
@@ -56,7 +57,9 @@ async function callAIClassifier(
             categories: isBot ? ['bot'] : ['human'],
             explanation: `AI classifier score: ${botScore.toFixed(3)}`,
         };
-    } catch {
+    } catch(e) {
+        console.error('[DecisionEngine] AI classifier error:', e);
+        Sentry.captureException(e);
         // Timeout or network error - fail silently
         return null;
     } finally {
