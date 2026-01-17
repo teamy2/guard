@@ -2,4 +2,6 @@
 
 import { createAuthClient } from '@neondatabase/auth/next';
 
-export const authClient = createAuthClient();
+export const authClient = createAuthClient({
+  basePath: '/internal/api/auth',
+});

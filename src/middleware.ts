@@ -75,10 +75,7 @@ export const config = {
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - public folder
-         * - api/auth (auth routes)
-         * - api/cron (cron jobs)
-         * - api/health (internal health check)
-         * - internal (all internal routes including admin, API, cron, health)
+         * - internal (all internal routes including admin, API, auth, cron, health)
          * - challenge (challenge page)
          * - images/files
          */
