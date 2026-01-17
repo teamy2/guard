@@ -12,11 +12,35 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { challengeResponse, returnPath } = body;
 
-        // In a real implementation, verify the CAPTCHA response here
-        // For demo purposes, we accept any non-empty response
-        if (!challengeResponse) {
+        // Verify the Turnstile CAPTCHA response
+        const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+        if (!turnstileSecret) {
+            console.error('[Challenge] Missing TURNSTILE_SECRET_KEY');
             return NextResponse.json(
-                { error: 'Challenge response required' },
+                { error: 'Server configuration error' },
+                { status: 500 }
+            );
+        }
+
+        const verifyResponse = await fetch(
+            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    secret: turnstileSecret,
+                    response: challengeResponse,
+                    remoteip: request.headers.get('x-real-ip') || undefined,
+                }),
+            }
+        );
+
+        const verifyData = await verifyResponse.json();
+
+        if (!verifyData.success) {
+            console.warn('[Challenge] Turnstile verification failed:', verifyData['error-codes']);
+            return NextResponse.json(
+                { error: 'Verification failed. Please try again.' },
                 { status: 400 }
             );
         }

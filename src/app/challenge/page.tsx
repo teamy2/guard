@@ -2,15 +2,23 @@
 
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 function ChallengeForm() {
     const searchParams = useSearchParams();
     const returnPath = searchParams.get('return') || '/';
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [token, setToken] = useState<string>('');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!token) {
+            setError('Please complete the security check.');
+            return;
+        }
+
         setLoading(true);
         setError('');
 
@@ -19,7 +27,7 @@ function ChallengeForm() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    challengeResponse: 'human-verified',
+                    challengeResponse: token,
                     returnPath,
                 }),
             });
@@ -27,7 +35,8 @@ function ChallengeForm() {
             if (response.ok) {
                 window.location.href = returnPath;
             } else {
-                setError('Verification failed. Please try again.');
+                const data = await response.json();
+                setError(data.error || 'Verification failed. Please try again.');
             }
         } catch {
             setError('An error occurred. Please try again.');
@@ -59,11 +68,17 @@ function ChallengeForm() {
                         This is a protective measure to ensure security.
                     </p>
 
-                    {/* In production, integrate with hCaptcha/Turnstile here */}
-                    <div className="h-24 bg-gray-700/50 rounded-lg flex items-center justify-center mb-4">
-                        <span className="text-gray-500 text-sm">
-                            [CAPTCHA Widget - Integrate hCaptcha/Turnstile]
-                        </span>
+                    {/* Replace placeholder with Turnstile widget */}
+                    <div className="flex justify-center mb-4">
+                        <Turnstile
+                            siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ''}
+                            onSuccess={(token) => {
+                                setToken(token);
+                                setError('');
+                            }}
+                            onError={() => setError('Turnstile failed to load. Please refresh.')}
+                            onExpire={() => setToken('')}
+                        />
                     </div>
                 </div>
 
