@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 
 interface DashboardStats {
     totalRequests: number;
@@ -20,6 +22,15 @@ interface BackendStatus {
     latencyP95: number;
 }
 
+interface TrafficDataPoint {
+    time: string;
+    total: number;
+    allow: number;
+    block: number;
+    challenge: number;
+    throttle: number;
+}
+
 export default function DashboardPage() {
     const [stats, setStats] = useState<DashboardStats>({
         totalRequests: 0,
@@ -32,7 +43,9 @@ export default function DashboardPage() {
     });
 
     const [backends, setBackends] = useState<BackendStatus[]>([]);
+    const [trafficData, setTrafficData] = useState<TrafficDataPoint[]>([]);
     const [loading, setLoading] = useState(true);
+    const [trafficLoading, setTrafficLoading] = useState(true);
 
     useEffect(() => {
         // Fetch dashboard stats
@@ -68,7 +81,52 @@ export default function DashboardPage() {
                 }));
             })
             .catch(() => { });
+
+        // Fetch traffic data
+        fetch('/internal/api/metrics/traffic')
+            .then(res => res.json())
+            .then(data => {
+                setTrafficData(data.data || []);
+                setTrafficLoading(false);
+            })
+            .catch((error) => {
+                console.error('Failed to fetch traffic data:', error);
+                setTrafficLoading(false);
+            });
     }, []);
+
+    const chartConfig: ChartConfig = {
+        total: {
+            label: "Total",
+            color: "var(--chart-1)",
+        },
+        allow: {
+            label: "Allowed",
+            color: "#22c55e", // green-500
+        },
+        block: {
+            label: "Blocked",
+            color: "#ef4444", // red-500
+        },
+        challenge: {
+            label: "Challenged",
+            color: "#eab308", // yellow-500
+        },
+        throttle: {
+            label: "Throttled",
+            color: "#f97316", // orange-500
+        },
+    };
+
+    // Format data for chart - format time labels
+    const chartData = trafficData.map(point => ({
+        ...point,
+        timeLabel: new Date(point.time).toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+        }),
+    }));
 
     return (
         <div className="space-y-8">
@@ -115,19 +173,97 @@ export default function DashboardPage() {
 
             {/* Two Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Traffic Chart Placeholder */}
+                {/* Traffic Overview Chart */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Traffic Overview</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="h-64 flex items-center justify-center bg-muted/30 rounded-lg">
-                            <div className="text-center">
-                                <div className="text-4xl mb-2">📈</div>
-                                <p className="text-muted-foreground text-sm">Traffic chart</p>
-                                <p className="text-muted-foreground text-xs mt-1">Connect to Sentry for real-time data</p>
+                        {trafficLoading ? (
+                            <div className="flex items-center justify-center h-64">
+                                <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
                             </div>
-                        </div>
+                        ) : chartData.length > 0 ? (
+                            <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
+                                <AreaChart
+                                    data={chartData}
+                                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                                >
+                                    <defs>
+                                        <linearGradient id="fillAllow" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="var(--color-allow)" stopOpacity={0.8}/>
+                                            <stop offset="95%" stopColor="var(--color-allow)" stopOpacity={0.1}/>
+                                        </linearGradient>
+                                        <linearGradient id="fillBlock" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="var(--color-block)" stopOpacity={0.8}/>
+                                            <stop offset="95%" stopColor="var(--color-block)" stopOpacity={0.1}/>
+                                        </linearGradient>
+                                        <linearGradient id="fillChallenge" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="var(--color-challenge)" stopOpacity={0.8}/>
+                                            <stop offset="95%" stopColor="var(--color-challenge)" stopOpacity={0.1}/>
+                                        </linearGradient>
+                                        <linearGradient id="fillThrottle" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="var(--color-throttle)" stopOpacity={0.8}/>
+                                            <stop offset="95%" stopColor="var(--color-throttle)" stopOpacity={0.1}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+                                    <XAxis
+                                        dataKey="timeLabel"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tickMargin={8}
+                                        tickFormatter={(value) => value}
+                                        className="text-xs"
+                                    />
+                                    <ChartTooltip 
+                                        content={
+                                            <ChartTooltipContent 
+                                                labelKey="timeLabel"
+                                                formatter={(value, name) => {
+                                                    const label = chartConfig[name as keyof ChartConfig]?.label || name;
+                                                    return [value, label];
+                                                }}
+                                            />
+                                        }
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="allow"
+                                        stackId="1"
+                                        stroke="var(--color-allow)"
+                                        fill="url(#fillAllow)"
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="block"
+                                        stackId="1"
+                                        stroke="var(--color-block)"
+                                        fill="url(#fillBlock)"
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="challenge"
+                                        stackId="1"
+                                        stroke="var(--color-challenge)"
+                                        fill="url(#fillChallenge)"
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="throttle"
+                                        stackId="1"
+                                        stroke="var(--color-throttle)"
+                                        fill="url(#fillThrottle)"
+                                    />
+                                </AreaChart>
+                            </ChartContainer>
+                        ) : (
+                            <div className="text-center text-muted-foreground py-8">
+                                <div className="text-4xl mb-2">📊</div>
+                                <p className="text-sm">No traffic data yet</p>
+                                <p className="text-xs mt-1">Traffic will appear here as requests are processed</p>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 

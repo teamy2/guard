@@ -402,6 +402,96 @@ export async function getBotStats(hours: number = 1): Promise<{
   };
 }
 
+/**
+ * Get recent requests for traffic overview
+ */
+export async function getRecentRequests(limit: number = 50): Promise<Array<{
+  requestId: string;
+  timestamp: string;
+  decision: string;
+  path: string | null;
+  method: string | null;
+  backendId: string | null;
+  latencyMs: number | null;
+  botScore: number | null;
+  botBucket: string | null;
+  botReason: string | null;
+  statusCode: number | null;
+}>> {
+  const result = await sql`
+    SELECT 
+      request_id,
+      timestamp,
+      decision,
+      path,
+      method,
+      backend_id,
+      latency_ms,
+      bot_score,
+      bot_bucket,
+      bot_reason,
+      status_code
+    FROM request_metrics
+    ORDER BY timestamp DESC
+    LIMIT ${limit}
+  `;
+
+  return result.rows.map(row => ({
+    requestId: row.request_id as string,
+    timestamp: (row.timestamp as Date).toISOString(),
+    decision: row.decision as string,
+    path: row.path as string | null,
+    method: row.method as string | null,
+    backendId: row.backend_id as string | null,
+    latencyMs: row.latency_ms as number | null,
+    botScore: row.bot_score as number | null,
+    botBucket: row.bot_bucket as string | null,
+    botReason: row.bot_reason as string | null,
+    statusCode: row.status_code as number | null,
+  }));
+}
+
+/**
+ * Get time-bucketed request data for the last 24 hours
+ * Buckets requests into 30-minute intervals
+ */
+export async function getTimeBucketedRequests(): Promise<Array<{
+  time: string;
+  total: number;
+  allow: number;
+  block: number;
+  challenge: number;
+  throttle: number;
+}>> {
+  // Get data from the last 24 hours
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  // Query to bucket by 30-minute intervals
+  const result = await sql`
+    SELECT 
+      DATE_TRUNC('hour', timestamp) + 
+      INTERVAL '30 minutes' * FLOOR(EXTRACT(MINUTE FROM timestamp) / 30) as bucket_time,
+      COUNT(*) as total,
+      COUNT(*) FILTER (WHERE decision = 'allow') as allow_count,
+      COUNT(*) FILTER (WHERE decision = 'block') as block_count,
+      COUNT(*) FILTER (WHERE decision = 'challenge') as challenge_count,
+      COUNT(*) FILTER (WHERE decision = 'throttle') as throttle_count
+    FROM request_metrics
+    WHERE timestamp >= ${since}
+    GROUP BY bucket_time
+    ORDER BY bucket_time ASC
+  `;
+
+  return result.rows.map(row => ({
+    time: new Date(row.bucket_time as Date).toISOString(),
+    total: parseInt(row.total as string, 10),
+    allow: parseInt(row.allow_count as string, 10),
+    block: parseInt(row.block_count as string, 10),
+    challenge: parseInt(row.challenge_count as string, 10),
+    throttle: parseInt(row.throttle_count as string, 10),
+  }));
+}
+
 // ===========================================
 // DATABASE INITIALIZATION
 // ===========================================
