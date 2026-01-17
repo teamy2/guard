@@ -1,13 +1,40 @@
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, status, Depends
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 import torch
 import numpy as np
 import pickle
 from model import BotClassifier, extract_features
 import os
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv())
 
 app = FastAPI()
+
+# Security
+api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
+
+def get_api_key(api_key_header: str = Security(api_key_header)):
+    correct_api_key = os.getenv("AI_CLASSIFIER_API_KEY")
+    if not correct_api_key:
+         # If env var is not set, we might want to fail open or closed. 
+         # secure by default: fail if not configured, or log a warning.
+         # For this task, let's assume it MUST be set.
+         print("Warning: AI_CLASSIFIER_API_KEY not set in environment")
+         raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server misconfiguration: API Key not set"
+        )
+        
+    if api_key_header == correct_api_key:
+        return api_key_header
+    
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Could not validate credentials"
+    )
 
 # Global variables for model and stats
 model = None
@@ -46,7 +73,7 @@ def health_check():
     return {"status": "ok", "model_loaded": model is not None}
 
 @app.post("/predict")
-def predict(features: RequestFeatures):
+def predict(features: RequestFeatures, api_key: str = Security(get_api_key)):
     if model is None or stats is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
         
