@@ -6,60 +6,60 @@ import { GlobalConfigSchema, createDefaultConfig } from './schema';
  * Get the active configuration from the database
  */
 export async function getActiveConfig(): Promise<GlobalConfig> {
-    try {
-        const result = await sql`
+  try {
+    const result = await sql`
       SELECT config_data FROM lb_configs 
       WHERE status = 'active' 
       ORDER BY updated_at DESC 
       LIMIT 1
     `;
 
-        if (result.rows.length === 0) {
-            // Return default config if none exists
-            return createDefaultConfig();
-        }
-
-        const parsed = GlobalConfigSchema.parse(result.rows[0].config_data);
-        return parsed;
-    } catch (error) {
-        console.error('[Config] Failed to load config from DB:', error);
-        return createDefaultConfig();
+    if (result.rows.length === 0) {
+      // Return default config if none exists
+      return createDefaultConfig();
     }
+
+    const parsed = GlobalConfigSchema.parse(result.rows[0].config_data);
+    return parsed;
+  } catch (error) {
+    console.error('[Config] Failed to load config from DB:', error);
+    return createDefaultConfig();
+  }
 }
 
 /**
  * Get a specific config version
  */
 export async function getConfigByVersion(version: string): Promise<GlobalConfig | null> {
-    try {
-        const result = await sql`
+  try {
+    const result = await sql`
       SELECT config_data FROM lb_configs 
       WHERE version = ${version}
       LIMIT 1
     `;
 
-        if (result.rows.length === 0) {
-            return null;
-        }
-
-        return GlobalConfigSchema.parse(result.rows[0].config_data);
-    } catch (error) {
-        console.error('[Config] Failed to load config version:', error);
-        return null;
+    if (result.rows.length === 0) {
+      return null;
     }
+
+    return GlobalConfigSchema.parse(result.rows[0].config_data);
+  } catch (error) {
+    console.error('[Config] Failed to load config version:', error);
+    return null;
+  }
 }
 
 /**
  * Save a new configuration
  */
 export async function saveConfig(config: GlobalConfig): Promise<void> {
-    const now = new Date().toISOString();
-    const configData = {
-        ...config,
-        updatedAt: now,
-    };
+  const now = new Date().toISOString();
+  const configData = {
+    ...config,
+    updatedAt: now,
+  };
 
-    await sql`
+  await sql`
     INSERT INTO lb_configs (version, status, config_data, created_at, updated_at)
     VALUES (${config.version}, ${config.status}, ${JSON.stringify(configData)}, ${now}, ${now})
     ON CONFLICT (version) 
@@ -74,13 +74,13 @@ export async function saveConfig(config: GlobalConfig): Promise<void> {
  * Activate a draft configuration
  */
 export async function activateConfig(version: string): Promise<void> {
-    // Deactivate all other configs
-    await sql`
+  // Deactivate all other configs
+  await sql`
     UPDATE lb_configs SET status = 'draft' WHERE status = 'active'
   `;
 
-    // Activate the specified version
-    await sql`
+  // Activate the specified version
+  await sql`
     UPDATE lb_configs SET status = 'active', updated_at = NOW()
     WHERE version = ${version}
   `;
@@ -90,27 +90,27 @@ export async function activateConfig(version: string): Promise<void> {
  * Get all config versions
  */
 export async function listConfigs(): Promise<Array<{ version: string; status: string; updatedAt: string }>> {
-    const result = await sql`
+  const result = await sql`
     SELECT version, status, updated_at as "updatedAt"
     FROM lb_configs
     ORDER BY updated_at DESC
     LIMIT 50
   `;
 
-    return result.rows as Array<{ version: string; status: string; updatedAt: string }>;
+  return result.rows as Array<{ version: string; status: string; updatedAt: string }>;
 }
 
 /**
  * Delete a draft configuration
  */
 export async function deleteConfig(version: string): Promise<boolean> {
-    const result = await sql`
+  const result = await sql`
     DELETE FROM lb_configs 
     WHERE version = ${version} AND status = 'draft'
     RETURNING version
   `;
 
-    return result.rows.length > 0;
+  return result.rows.length > 0;
 }
 
 // ===========================================
@@ -121,9 +121,9 @@ export async function deleteConfig(version: string): Promise<boolean> {
  * Save backend health status
  */
 export async function saveBackendHealth(health: BackendHealth): Promise<void> {
-    const now = new Date().toISOString();
+  const now = new Date().toISOString();
 
-    await sql`
+  await sql`
     INSERT INTO backend_health (backend_id, healthy, last_check, latency_p50, latency_p95, latency_p99, error_rate, consecutive_failures)
     VALUES (
       ${health.backendId}, 
@@ -151,7 +151,7 @@ export async function saveBackendHealth(health: BackendHealth): Promise<void> {
  * Get health status for all backends
  */
 export async function getAllBackendHealth(): Promise<BackendHealth[]> {
-    const result = await sql`
+  const result = await sql`
     SELECT 
       backend_id as "backendId",
       healthy,
@@ -164,14 +164,14 @@ export async function getAllBackendHealth(): Promise<BackendHealth[]> {
     FROM backend_health
   `;
 
-    return result.rows as BackendHealth[];
+  return result.rows as BackendHealth[];
 }
 
 /**
  * Get health status for a specific backend
  */
 export async function getBackendHealth(backendId: string): Promise<BackendHealth | null> {
-    const result = await sql`
+  const result = await sql`
     SELECT 
       backend_id as "backendId",
       healthy,
@@ -186,11 +186,11 @@ export async function getBackendHealth(backendId: string): Promise<BackendHealth
     LIMIT 1
   `;
 
-    if (result.rows.length === 0) {
-        return null;
-    }
+  if (result.rows.length === 0) {
+    return null;
+  }
 
-    return result.rows[0] as BackendHealth;
+  return result.rows[0] as BackendHealth;
 }
 
 // ===========================================
@@ -201,8 +201,8 @@ export async function getBackendHealth(backendId: string): Promise<BackendHealth
  * Initialize database tables
  */
 export async function initializeDatabase(): Promise<void> {
-    // Create configs table
-    await sql`
+  // Create configs table
+  await sql`
     CREATE TABLE IF NOT EXISTS lb_configs (
       id SERIAL PRIMARY KEY,
       version VARCHAR(50) UNIQUE NOT NULL,
@@ -213,8 +213,8 @@ export async function initializeDatabase(): Promise<void> {
     )
   `;
 
-    // Create backend health table
-    await sql`
+  // Create backend health table
+  await sql`
     CREATE TABLE IF NOT EXISTS backend_health (
       backend_id VARCHAR(100) PRIMARY KEY,
       healthy BOOLEAN NOT NULL DEFAULT true,
@@ -227,10 +227,10 @@ export async function initializeDatabase(): Promise<void> {
     )
   `;
 
-    // Create index on status for faster lookups
-    await sql`
+  // Create index on status for faster lookups
+  await sql`
     CREATE INDEX IF NOT EXISTS idx_lb_configs_status ON lb_configs(status)
   `;
 
-    console.log('[DB] Database initialized');
+  console.log('[DB] Database initialized');
 }

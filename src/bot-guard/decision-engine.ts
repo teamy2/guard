@@ -90,6 +90,46 @@ function createAIFeatureSummary(features: RequestFeatures): Record<string, unkno
  * Main decision engine entry point
  * Combines heuristics with optional AI classification
  */
+export async function callAiClassifier(features: RequestFeatures, config: BotGuardConfig): Promise<number | undefined> {
+    try {
+        const aiUrl = process.env.AI_CLASSIFIER_URL;
+        if (!aiUrl) return undefined;
+
+        console.log('[DecisionEngine] Calling AI Classifier:', aiUrl);
+
+        const response = await fetch(aiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': process.env.AI_CLASSIFIER_API_KEY || ''
+            },
+            body: JSON.stringify({
+                url: features.path, // Note: This is pathname only, training data used full URI
+                method: features.method,
+                user_agent: features.userAgent
+            }),
+            signal: AbortSignal.timeout(parseInt(process.env.AI_CLASSIFIER_TIMEOUT_MS || '1000'))
+        });
+
+        if (!response.ok) {
+            console.error('[DecisionEngine] AI call failed:', response.status);
+            return undefined;
+        }
+
+        const data = await response.json();
+        // Python API returns { "bot_score": float, "is_bot": bool }
+        return data.bot_score;
+
+    } catch (error) {
+        console.error('[DecisionEngine] AI error:', error);
+        return undefined;
+    }
+}
+
+/**
+ * Main decision engine entry point
+ * Combines heuristics with optional AI classification
+ */
 export async function makeDecision(
     features: RequestFeatures,
     config: BotGuardConfig,
