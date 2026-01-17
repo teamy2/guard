@@ -91,7 +91,12 @@ export function extractToken(request: Request): string | null {
         const cookies = cookieHeader.split(';').map(c => c.trim());
         const tokenCookie = cookies.find(c => c.startsWith('_challenge_token='));
         if (tokenCookie) {
-            return tokenCookie.split('=')[1];
+            const value = tokenCookie.split('=').slice(1).join('='); // Handle = in token value
+            try {
+                return decodeURIComponent(value);
+            } catch {
+                return value; // Fallback if decoding fails
+            }
         }
     }
 
@@ -104,11 +109,11 @@ export function extractToken(request: Request): string | null {
 export function createTokenCookie(token: string, secure: boolean = true): string {
     const maxAge = Math.floor(TOKEN_VALIDITY_MS / 1000);
     const parts = [
-        `_challenge_token=${token}`,
+        `_challenge_token=${encodeURIComponent(token)}`,
         `Max-Age=${maxAge}`,
         'Path=/',
         'HttpOnly',
-        'SameSite=Strict',
+        'SameSite=Lax', // Changed from Strict to Lax to allow cross-site navigation
     ];
 
     if (secure) {

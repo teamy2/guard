@@ -58,15 +58,25 @@ export async function POST(request: NextRequest) {
         const challengeSecret = process.env.CHALLENGE_SECRET || 'default-secret';
         const token = await issueToken(features.ipHash, returnPath || '/', challengeSecret);
 
-        // Create response with cookie
-        const response = NextResponse.json({
-            success: true,
-            returnPath: returnPath || '/',
-        });
+        // Create redirect response
+        const redirectUrl = returnPath || '/';
+        let response: NextResponse;
+        
+        try {
+            // Try to create absolute URL for redirect
+            const baseUrl = new URL(request.url);
+            const targetUrl = new URL(redirectUrl, baseUrl.origin);
+            response = NextResponse.redirect(targetUrl);
+        } catch {
+            // Fallback to relative redirect
+            response = NextResponse.redirect(new URL(redirectUrl, request.url));
+        }
 
-        response.headers.append(
+        // Set the cookie with proper attributes
+        const isSecure = request.url.startsWith('https') || process.env.NODE_ENV === 'production';
+        response.headers.set(
             'Set-Cookie',
-            createTokenCookie(token, request.url.startsWith('https'))
+            createTokenCookie(token, isSecure)
         );
 
         return response;

@@ -32,10 +32,16 @@ function ChallengeForm() {
                 }),
             });
 
-            if (response.ok) {
+            // Check if it's a redirect (307/302) or success
+            if (response.status === 307 || response.status === 302) {
+                // Server redirect - follow the Location header
+                const location = response.headers.get('Location') || returnPath;
+                window.location.href = location;
+            } else if (response.ok) {
+                // Success response - redirect to return path
                 window.location.href = returnPath;
             } else {
-                const data = await response.json();
+                const data = await response.json().catch(() => ({ error: 'Verification failed' }));
                 setError(data.error || 'Verification failed. Please try again.');
             }
         } catch {
