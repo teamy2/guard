@@ -534,6 +534,7 @@ export function shouldExcludePath(path: string): boolean {
         /^\/robots\.txt$/,      // Robots
         /^\/internal/,          // All internal routes (admin, API, cron, health, etc.)
         /^\/challenge/,         // Challenge page
+        /^\/api\/auth/,         // Auth API routes (should not be load balanced)
     ];
 
     return excludedPatterns.some(pattern => pattern.test(path));

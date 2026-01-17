@@ -61,6 +61,11 @@ function verifyMetricsAuth(request: NextRequest): boolean {
 export async function middleware(request: NextRequest, event: any) {
     const path = new URL(request.url).pathname;
 
+    // Exclude /api/auth/ from load balancing (pass through directly)
+    if (path.startsWith('/api/auth/')) {
+        return NextResponse.next();
+    }
+
     // Only run auth middleware for /internal/ paths
     if (path.startsWith('/internal/')) {
         // Allow metrics endpoint to bypass auth if valid API key is provided
