@@ -221,7 +221,7 @@ function ScoreBucket({
                     <span className="text-sm opacity-80">{score}</span>
                 </div>
                 <div className="text-3xl font-bold">{count.toLocaleString()}</div>
-                <div className="text-sm opacity-80 mt-1">{percentage}% of traffic</div>
+                <div className="text-sm opacity-80 mt-1">{percentage.toFixed(2)}% of traffic</div>
             </CardContent>
         </Card>
     );
@@ -232,7 +232,7 @@ function ReasonBar({ rule, count, percentage }: { rule: string; count: number; p
         <div>
             <div className="flex items-center justify-between mb-1">
                 <code className="text-sm bg-muted px-2 py-0.5 rounded text-foreground">{rule}</code>
-                <span className="text-sm text-muted-foreground">{count.toLocaleString()} ({percentage}%)</span>
+                <span className="text-sm text-muted-foreground">{count.toLocaleString()} ({percentage.toFixed(2)}%)</span>
             </div>
             <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div

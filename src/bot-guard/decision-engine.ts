@@ -37,7 +37,7 @@ async function callAIClassifier(
                 'Content-Type': 'application/json',
                 'x-api-key': config.apiKey,
             },
-            body: JSON.stringify({ features: featureSummary }),
+            body: JSON.stringify(featureSummary),
             signal: controller.signal,
         });
 
@@ -46,10 +46,15 @@ async function callAIClassifier(
         }
 
         const data = await response.json();
+        
+        // Python API returns { bot_score: float, is_bot: bool }
+        const botScore = data.bot_score ?? 0;
+        const isBot = data.is_bot ?? false;
+        
         return {
-            probability: data.probability ?? 0,
-            categories: data.categories ?? [],
-            explanation: data.explanation ?? 'AI classification',
+            probability: botScore,
+            categories: isBot ? ['bot'] : ['human'],
+            explanation: `AI classifier score: ${botScore.toFixed(3)}`,
         };
     } catch {
         // Timeout or network error - fail silently
@@ -60,29 +65,14 @@ async function callAIClassifier(
 }
 
 /**
- * Create a minimal feature summary for AI classifier
- * No PII, just behavioral signals
+ * Create feature summary matching Python API RequestFeatures model
+ * Matches ai-service/main.py: RequestFeatures(url: str, method: str = "GET", user_agent: str = "")
  */
 function createAIFeatureSummary(features: RequestFeatures): Record<string, unknown> {
     return {
+        url: features.path,
         method: features.method,
-        pathLength: features.path.length,
-        pathDepth: features.path.split('/').filter(Boolean).length,
-        hasQueryParams: features.path.includes('?'),
-
-        headerCount: features.headerCount,
-        hasAcceptHeader: features.hasAcceptHeader,
-        hasCookies: features.hasCookies,
-        cookieCount: features.cookieCount,
-
-        userAgentLength: features.userAgent.length,
-        hasAcceptLanguage: !!features.acceptLanguage,
-        hasReferer: !!features.referer,
-        hasOrigin: !!features.origin,
-
-        country: features.country,
-        hour: new Date(features.timestamp).getUTCHours(),
-        dayOfWeek: new Date(features.timestamp).getUTCDay(),
+        user_agent: features.userAgent,
     };
 }
 
