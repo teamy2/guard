@@ -26,6 +26,7 @@ import {
     captureBackendException,
     shouldSample,
     withSpanAsync,
+    trackAIClassifierPerformance,
 } from '@/sentry/instrumentation';
 import type {
     GlobalConfig,
@@ -113,13 +114,24 @@ export async function handleRequest(
         console.error('[Balancer] Invalid URL:', request.url, e);
     }
 
-    // Start Sentry transaction
+    // Start Sentry transaction with full request journey
     return Sentry.startSpan(
         {
-            name: `edge.balancer ${request.method} ${pathname}`,
+            name: `Request Journey: ${request.method} ${pathname}`,
             op: 'http.server',
+            attributes: {
+                'http.method': request.method,
+                'http.url': pathname,
+                'http.route': pathname,
+            },
         },
         async (span) => {
+            // Add initial breadcrumb for request start
+            // Note: requestId will be generated in extractFeatures
+            addDecisionBreadcrumb('request.start', 'Request received', {
+                method: request.method,
+                path: pathname,
+            });
             let features: RequestFeatures;
             let decision: DecisionAction = 'allow';
             let policyVersion = config.version;
@@ -127,19 +139,39 @@ export async function handleRequest(
             let botResult: BotScoringResult | undefined;
 
             try {
-                // 1. Extract features
-                Sentry.addBreadcrumb({ category: 'debug', message: 'Extracting features...' });
+                // 1. Extract features - Step 1 in request journey
+                Sentry.addBreadcrumb({ 
+                    category: 'request.journey', 
+                    message: 'Step 1: Extracting request features',
+                    level: 'info',
+                    data: { step: 1, stage: 'feature_extraction' }
+                });
                 features = await withSpanAsync(
                     SpanOps.FEATURE_EXTRACT,
                     'Extract request features',
                     () => extractFeatures(request, ipSalt)
                 );
+                
+                // Add feature context to span
+                const featureSpan = Sentry.getActiveSpan();
+                if (featureSpan) {
+                    featureSpan.setAttribute('features.ip_hash', features.ipHash);
+                    featureSpan.setAttribute('features.user_agent_length', features.userAgent.length);
+                    featureSpan.setAttribute('features.has_cookies', features.hasCookies);
+                    featureSpan.setAttribute('features.country', features.country || 'unknown');
+                }
+                
                 Sentry.addBreadcrumb({
-                    category: 'debug',
+                    category: 'request.journey',
                     message: 'Features extracted',
+                    level: 'info',
                     data: {
+                        step: 1,
+                        stage: 'feature_extraction_complete',
                         ipHash: features.ipHash.substring(0, 8),
-                        uaLength: features.userAgent.length
+                        uaLength: features.userAgent.length,
+                        hasCookies: features.hasCookies,
+                        country: features.country
                     }
                 });
 
@@ -177,8 +209,13 @@ export async function handleRequest(
                     }
                 }
 
-                // 4. Rate limiting
-                Sentry.addBreadcrumb({ category: 'debug', message: 'Checking rate limit...' });
+                // 4. Rate limiting - Step 2 in request journey
+                Sentry.addBreadcrumb({ 
+                    category: 'request.journey', 
+                    message: 'Step 2: Checking rate limits',
+                    level: 'info',
+                    data: { step: 2, stage: 'rate_limiting', key_type: rateConfig.keyType }
+                });
                 const rateResult = await withSpanAsync(
                     SpanOps.RATE_LIMIT,
                     'Check rate limits',
@@ -186,6 +223,17 @@ export async function handleRequest(
                 );
 
                 setRateLimitContext(rateResult.keyType, rateResult.allowed, rateResult.remaining);
+                
+                // Add rate limit decision to span
+                const rateSpan = Sentry.getActiveSpan();
+                if (rateSpan) {
+                    rateSpan.setAttribute('ratelimit.allowed', rateResult.allowed);
+                    rateSpan.setAttribute('ratelimit.remaining', rateResult.remaining);
+                    rateSpan.setAttribute('ratelimit.key_type', rateResult.keyType);
+                    if (rateResult.retryAfterMs) {
+                        rateSpan.setAttribute('ratelimit.retry_after_ms', rateResult.retryAfterMs);
+                    }
+                }
 
                 if (!rateResult.allowed) {
                     decision = 'throttle';
@@ -219,8 +267,14 @@ export async function handleRequest(
                     );
                 }
 
-                // 5. Bot detection
+                // 5. Bot detection - Step 3 in request journey
                 if (isValidatedHuman) {
+                    Sentry.addBreadcrumb({ 
+                        category: 'request.journey', 
+                        message: 'Step 3: Bot detection (challenge token validated)',
+                        level: 'info',
+                        data: { step: 3, stage: 'bot_detection', bypass: 'challenge_token' }
+                    });
                     botResult = {
                         score: 0,
                         bucket: 'low',
@@ -228,7 +282,17 @@ export async function handleRequest(
                         reasons: [{ rule: 'challenge_token', weight: 0, triggered: true, explanation: 'Valid challenge token' }]
                     };
                 } else {
-                    Sentry.addBreadcrumb({ category: 'debug', message: 'Evaluating bot score...' });
+                    Sentry.addBreadcrumb({ 
+                        category: 'request.journey', 
+                        message: 'Step 3: Evaluating bot score',
+                        level: 'info',
+                        data: { 
+                            step: 3, 
+                            stage: 'bot_detection',
+                            heuristics_enabled: true,
+                            ai_enabled: botConfig.useAiClassifier 
+                        }
+                    });
                     const aiConfig = process.env.AI_CLASSIFIER_URL ? {
                         url: process.env.AI_CLASSIFIER_URL,
                         apiKey: process.env.AI_CLASSIFIER_API_KEY || '',
@@ -237,7 +301,7 @@ export async function handleRequest(
 
                     botResult = await withSpanAsync(
                         SpanOps.BOT_HEURISTICS,
-                        'Evaluate bot score',
+                        'Evaluate bot score (heuristics + AI)',
                         () => makeDecision(features, botConfig, {
                             ipAllowlist: policy?.ipAllowlist,
                             ipBlocklist: policy?.ipBlocklist,
@@ -247,15 +311,37 @@ export async function handleRequest(
                 }
 
                 Sentry.addBreadcrumb({
-                    category: 'debug',
+                    category: 'request.journey',
                     message: 'Bot score calculated',
-                    data: { score: botResult.score }
+                    level: 'info',
+                    data: { 
+                        step: 3, 
+                        stage: 'bot_detection_complete',
+                        score: botResult.score,
+                        bucket: botResult.bucket,
+                        decision: botResult.decision,
+                        ai_used: !!botResult.aiResult,
+                        ai_score: botResult.aiResult?.probability
+                    }
                 });
 
                 setBotContext(botResult);
 
                 if (shouldEmitTelemetry) {
                     recordBotScore(botResult.score, features.path);
+                    
+                    // Track AI classifier performance if AI was used
+                    if (botResult.aiResult) {
+                        // Extract heuristic score from reasons (approximate)
+                        const heuristicScore = botResult.reasons.reduce((sum, r) => sum + (r.triggered ? r.weight : 0), 0) / 100;
+                        trackAIClassifierPerformance(
+                            heuristicScore,
+                            botResult.aiResult.probability,
+                            botResult.score,
+                            botResult.decision,
+                            features.path
+                        );
+                    }
                 }
 
                 // Handle bot decision
@@ -352,10 +438,17 @@ export async function handleRequest(
                     }
                 }
 
-                // 6. Select backend
+                // 6. Select backend - Step 4 in request journey
                 const selectedBackends = decision === 'reroute' && botConfig.rerouteBackendId
                     ? backends.filter(b => b.id === botConfig.rerouteBackendId)
                     : backends;
+
+                Sentry.addBreadcrumb({ 
+                    category: 'request.journey', 
+                    message: 'Step 4: Selecting backend',
+                    level: 'info',
+                    data: { step: 4, stage: 'route_selection', strategy, candidates: selectedBackends.length }
+                });
 
                 const lbResult = await withSpanAsync(
                     SpanOps.ROUTE_SELECT,
@@ -373,12 +466,27 @@ export async function handleRequest(
                 setLoadBalancerContext(lbResult);
                 backendId = lbResult.backend.id;
 
-                addDecisionBreadcrumb('backend', `Selected backend: ${lbResult.backend.id}`, {
-                    strategy: lbResult.strategy,
-                    candidates: lbResult.candidatesCount,
+                Sentry.addBreadcrumb({
+                    category: 'request.journey',
+                    message: 'Backend selected',
+                    level: 'info',
+                    data: {
+                        step: 4,
+                        stage: 'route_selection_complete',
+                        backend: lbResult.backend.id,
+                        strategy: lbResult.strategy,
+                        candidates: lbResult.candidatesCount,
+                        selection_reason: lbResult.selectionReason
+                    }
                 });
 
-                // 7. Proxy to backend
+                // 7. Proxy to backend - Step 5 in request journey
+                Sentry.addBreadcrumb({ 
+                    category: 'request.journey', 
+                    message: 'Step 5: Proxying request to backend',
+                    level: 'info',
+                    data: { step: 5, stage: 'proxy', backend: lbResult.backend.id }
+                });
                 const proxyStartTime = Date.now();
 
                 const response = await withSpanAsync(
