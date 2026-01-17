@@ -1,0 +1,109 @@
+[
+    {
+        "id": "spike-in-blocks",
+        "name": "Spike in Block Actions",
+        "conditions": [
+            {
+                "type": "event_frequency",
+                "query": "tags[decision]:block",
+                "threshold": 100,
+                "interval": "5m"
+            }
+        ],
+        "actions": [
+            {
+                "type": "email",
+                "recipients": [
+                    "oncall@example.com"
+                ]
+            },
+            {
+                "type": "slack",
+                "channel": "#alerts-security"
+            }
+        ],
+        "description": "Triggers when block actions spike, indicating a potential attack or false positive issue"
+    },
+    {
+        "id": "backend-health-down",
+        "name": "Backend Health Degradation",
+        "conditions": [
+            {
+                "type": "metric",
+                "metric": "backend_health",
+                "comparison": "equals",
+                "value": 0,
+                "duration": "2m"
+            }
+        ],
+        "actions": [
+            {
+                "type": "pagerduty",
+                "severity": "warning"
+            }
+        ],
+        "description": "Triggers when a backend is unhealthy for 2+ minutes"
+    },
+    {
+        "id": "latency-regression",
+        "name": "P95 Latency Regression",
+        "conditions": [
+            {
+                "type": "metric",
+                "metric": "backend_latency_ms",
+                "percentile": "p95",
+                "comparison": "greater_than",
+                "value": 500,
+                "duration": "5m"
+            }
+        ],
+        "actions": [
+            {
+                "type": "email",
+                "recipients": [
+                    "oncall@example.com"
+                ]
+            }
+        ],
+        "description": "Triggers when P95 latency exceeds 500ms for 5+ minutes"
+    },
+    {
+        "id": "error-rate-spike",
+        "name": "Error Rate Spike",
+        "conditions": [
+            {
+                "type": "event_frequency",
+                "query": "level:error",
+                "threshold": 50,
+                "interval": "5m"
+            }
+        ],
+        "actions": [
+            {
+                "type": "pagerduty",
+                "severity": "critical"
+            }
+        ],
+        "description": "Triggers when error rate spikes significantly"
+    },
+    {
+        "id": "rate-limit-exhaustion",
+        "name": "Rate Limit Exhaustion",
+        "conditions": [
+            {
+                "type": "metric",
+                "metric": "rate_limited_total",
+                "comparison": "greater_than",
+                "value": 1000,
+                "interval": "5m"
+            }
+        ],
+        "actions": [
+            {
+                "type": "slack",
+                "channel": "#alerts-traffic"
+            }
+        ],
+        "description": "Triggers when too many requests are being rate limited"
+    }
+]

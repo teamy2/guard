@@ -1,0 +1,159 @@
+import type { Backend } from '@/config/schema';
+
+/**
+ * Proxy request to selected backend
+ */
+export async function proxyRequest(
+    request: Request,
+    backend: Backend,
+    additionalHeaders: Record<string, string> = {}
+): Promise<Response> {
+    const url = new URL(request.url);
+    const backendUrl = new URL(backend.url);
+
+    // Rewrite URL to backend
+    url.protocol = backendUrl.protocol;
+    url.host = backendUrl.host;
+    url.port = backendUrl.port;
+
+    // Create new headers, preserving most original headers
+    const headers = new Headers(request.headers);
+
+    // Set forwarding headers
+    headers.set('X-Forwarded-Host', request.headers.get('host') || '');
+    headers.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
+
+    // Add any additional headers (request ID, trace ID, etc.)
+    for (const [key, value] of Object.entries(additionalHeaders)) {
+        headers.set(key, value);
+    }
+
+    // Don't forward host header - use backend host
+    headers.set('Host', backendUrl.host);
+
+    const startTime = Date.now();
+
+    try {
+        const response = await fetch(url.toString(), {
+            method: request.method,
+            headers,
+            body: request.body,
+            // @ts-expect-error - duplex is required for streaming bodies
+            duplex: 'half',
+        });
+
+        const latency = Date.now() - startTime;
+
+        // Create new response with additional headers
+        const responseHeaders = new Headers(response.headers);
+        responseHeaders.set('X-Backend', backend.id);
+        responseHeaders.set('X-Backend-Latency', String(latency));
+
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders,
+        });
+    } catch (error) {
+        const latency = Date.now() - startTime;
+
+        // Return a 502 Bad Gateway on backend error
+        return new Response(
+            JSON.stringify({
+                error: 'Bad Gateway',
+                message: 'Backend unavailable',
+                backend: backend.id,
+            }),
+            {
+                status: 502,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Backend': backend.id,
+                    'X-Backend-Latency': String(latency),
+                },
+            }
+        );
+    }
+}
+
+/**
+ * Create a block response (403)
+ */
+export function createBlockResponse(
+    requestId: string,
+    minimal: boolean = true
+): Response {
+    const body = minimal
+        ? 'Forbidden'
+        : JSON.stringify({ error: 'Forbidden', requestId });
+
+    return new Response(body, {
+        status: 403,
+        headers: {
+            'Content-Type': minimal ? 'text/plain' : 'application/json',
+            'X-Request-Id': requestId,
+        },
+    });
+}
+
+/**
+ * Create a throttle response (429)
+ */
+export function createThrottleResponse(
+    requestId: string,
+    retryAfterSeconds: number = 60,
+    remaining: number = 0,
+    resetAt: number = Date.now() + 60000
+): Response {
+    return new Response(
+        JSON.stringify({
+            error: 'Too Many Requests',
+            message: 'Rate limit exceeded',
+            retryAfter: retryAfterSeconds,
+        }),
+        {
+            status: 429,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Request-Id': requestId,
+                'Retry-After': String(retryAfterSeconds),
+                'X-RateLimit-Remaining': String(remaining),
+                'X-RateLimit-Reset': String(Math.ceil(resetAt / 1000)),
+            },
+        }
+    );
+}
+
+/**
+ * Create a challenge redirect response
+ */
+export function createChallengeResponse(
+    requestId: string,
+    challengeUrl: string,
+    originalPath: string
+): Response {
+    const redirectUrl = `${challengeUrl}?return=${encodeURIComponent(originalPath)}`;
+
+    return new Response(null, {
+        status: 302,
+        headers: {
+            'Location': redirectUrl,
+            'X-Request-Id': requestId,
+        },
+    });
+}
+
+/**
+ * Create response headers with standard fields
+ */
+export function createStandardHeaders(
+    requestId: string,
+    traceId: string,
+    additionalHeaders: Record<string, string> = {}
+): Record<string, string> {
+    return {
+        'X-Request-Id': requestId,
+        'X-Trace-Id': traceId,
+        ...additionalHeaders,
+    };
+}
