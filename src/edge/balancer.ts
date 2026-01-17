@@ -245,24 +245,27 @@ export async function handleRequest(
                     });
 
                     decision = botResult.decision;
-                    /*addDecisionBreadcrumb('bot', `Bot decision: ${decision}`, {
+                    addDecisionBreadcrumb('bot', `Bot decision: ${decision}`, {
                         score: botResult.score,
                         bucket: botResult.bucket,
                         reasons: botResult.reasons.filter(r => r.triggered).map(r => r.rule),
-                    });*/
+                    });
 
-                    /*if (shouldEmitTelemetry) {
+                    if (shouldEmitTelemetry) {
                         incrementBotActionCounter(decision, features.path);
                         incrementRequestCounter(decision, features.path, undefined);
-                    }*/
+                    }
 
                     setStandardTags(decision, features.path, policyVersion, undefined, botResult.bucket);
 
+                    console.log('[Balancer] Executing decision action:', decision);
                     switch (decision) {
                         case 'block':
+                            console.log('[Balancer] Creating block response');
                             return createBlockResponse(features.requestId);
 
                         case 'challenge':
+                            console.log('[Balancer] Creating challenge response. URL:', config.challengePageUrl);
                             return createChallengeResponse(
                                 features.requestId,
                                 config.challengePageUrl,
@@ -270,9 +273,11 @@ export async function handleRequest(
                             );
 
                         case 'throttle':
+                            console.log('[Balancer] Creating throttle response');
                             return createThrottleResponse(features.requestId, 30, 0);
 
                         case 'reroute':
+                            console.log('[Balancer] Rerouting request');
                             // Will handle in backend selection
                             break;
                     }
