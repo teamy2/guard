@@ -99,7 +99,7 @@ export default function PoliciesPage() {
                 headers['Authorization'] = `Bearer ${key}`;
             }
 
-            const res = await fetch('/__internal__/api/admin/config', { headers });
+            const res = await fetch('/internal/api/admin/config', { headers });
 
             if (!res.ok) {
                 if (res.status === 401) {
@@ -136,7 +136,7 @@ export default function PoliciesPage() {
                 updatedAt: new Date().toISOString(),
             };
 
-            const res = await fetch('/__internal__/api/admin/config', {
+            const res = await fetch('/internal/api/admin/config', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

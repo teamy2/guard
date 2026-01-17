@@ -18,7 +18,7 @@ export default function BackendsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('/__internal__/api/admin/backends')
+        fetch('/internal/api/admin/backends')
             .then(res => res.json())
             .then(data => {
                 setBackends(data.backends || []);

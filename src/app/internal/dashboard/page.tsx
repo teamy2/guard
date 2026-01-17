@@ -35,7 +35,7 @@ export default function DashboardPage() {
 
     useEffect(() => {
         // Fetch backend health
-        fetch('/__internal__/api/admin/backends')
+        fetch('/internal/api/admin/backends')
             .then(res => res.json())
             .then(data => setBackends(data.backends || []))
             .catch(() => { });

@@ -45,12 +45,12 @@ export const config = {
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - public folder
-         * - __internal__ (admin routes)
+         * - internal (admin routes)
          * - api/auth (auth routes)
          * - api/cron (cron jobs)
          * - api/health (internal health check)
          * - challenge (challenge page)
          */
-        '/((?!_next/static|_next/image|favicon.ico|__internal__|api/auth|api/cron|api/health|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|internal|api/auth|api/cron|api/health|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 };
