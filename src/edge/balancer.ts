@@ -361,8 +361,7 @@ export function shouldExcludePath(path: string): boolean {
         /^\/api\/health$/,      // Health check
         /^\/favicon\.ico$/,     // Favicon
         /^\/robots\.txt$/,      // Robots
-        /^\/__/,                // Internal endpoints
-        /^\/dashboard/,         // Admin dashboard
+        /^\/internal/,          // Admin routes
         /^\/challenge/,         // Challenge page
     ];
 

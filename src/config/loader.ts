@@ -54,6 +54,7 @@ export async function loadConfig(): Promise<GlobalConfig> {
         return config;
     } catch (error) {
         console.error('[ConfigLoader] Failed to load config:', error);
+        console.log('[ConfigLoader] Using fallback config (empty backends)');
 
         // Return a minimal fallback config
         return {

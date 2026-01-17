@@ -20,6 +20,7 @@ export async function middleware(request: NextRequest) {
 
         // If no backends configured, pass through
         if (config.backends.length === 0) {
+            console.log('[Middleware] No backends configured (or fallback used), passing through');
             return NextResponse.next();
         }
 
