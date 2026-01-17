@@ -18,7 +18,7 @@ export default function BackendsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('/api/admin/backends')
+        fetch('/__internal__/api/admin/backends')
             .then(res => res.json())
             .then(data => {
                 setBackends(data.backends || []);
@@ -92,7 +92,7 @@ export default function BackendsPage() {
                             <div className="flex items-center justify-between">
                                 <span className="font-medium">{backend.backendId}</span>
                                 <span className={`text-sm ${(backend.latencyP95 || 0) < 50 ? 'text-green-400' :
-                                        (backend.latencyP95 || 0) < 100 ? 'text-yellow-400' : 'text-red-400'
+                                    (backend.latencyP95 || 0) < 100 ? 'text-yellow-400' : 'text-red-400'
                                     }`}>
                                     {backend.latencyP95 || 0}ms
                                 </span>
@@ -100,8 +100,8 @@ export default function BackendsPage() {
                             <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
                                 <div
                                     className={`h-full rounded-full transition-all duration-500 ${(backend.latencyP95 || 0) < 50 ? 'bg-gradient-to-r from-green-500 to-green-400' :
-                                            (backend.latencyP95 || 0) < 100 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
-                                                'bg-gradient-to-r from-red-500 to-red-400'
+                                        (backend.latencyP95 || 0) < 100 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                                            'bg-gradient-to-r from-red-500 to-red-400'
                                         }`}
                                     style={{ width: `${Math.min(100, (backend.latencyP95 || 0) / 2)}%` }}
                                 />
@@ -148,8 +148,8 @@ function BackendCard({ backend }: { backend: Backend }) {
                     <h3 className="text-xl font-semibold">{backend.backendId}</h3>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${backend.healthy
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-red-500/20 text-red-400'
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-red-500/20 text-red-400'
                     }`}>
                     {backend.healthy ? 'Healthy' : 'Unhealthy'}
                 </span>

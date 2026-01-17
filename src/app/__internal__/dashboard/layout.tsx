@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Button } from "@/components/ui/button";
 
 export default function DashboardLayout({
     children,
@@ -6,24 +7,24 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     return (
-        <div className="min-h-screen bg-gray-950 text-gray-100">
+        <div className="min-h-screen bg-background text-foreground">
             {/* Navigation */}
-            <nav className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-xl sticky top-0 z-50">
+            <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16">
                         <div className="flex items-center gap-8">
-                            <Link href="/dashboard" className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                                    <span className="text-white font-bold text-sm">LB</span>
+                            <Link href="/__internal__/dashboard" className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+                                    <span className="text-primary-foreground font-bold text-sm">LB</span>
                                 </div>
                                 <span className="font-semibold text-lg">Edge Balancer</span>
                             </Link>
 
                             <div className="hidden md:flex items-center gap-1">
-                                <NavLink href="/dashboard">Overview</NavLink>
-                                <NavLink href="/dashboard/bots">Bot Guard</NavLink>
-                                <NavLink href="/dashboard/backends">Backends</NavLink>
-                                <NavLink href="/dashboard/policies">Policies</NavLink>
+                                <NavLink href="/__internal__/dashboard">Overview</NavLink>
+                                <NavLink href="/__internal__/dashboard/bots">Bot Guard</NavLink>
+                                <NavLink href="/__internal__/dashboard/backends">Backends</NavLink>
+                                <NavLink href="/__internal__/dashboard/policies">Policies</NavLink>
                             </div>
                         </div>
 
@@ -32,7 +33,7 @@ export default function DashboardLayout({
                                 href="https://sentry.io"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+                                className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                             >
                                 <SentryIcon />
                                 Sentry
@@ -52,11 +53,10 @@ export default function DashboardLayout({
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
     return (
-        <Link
-            href={href}
-            className="px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-        >
-            {children}
+        <Link href={href}>
+            <Button variant="ghost" className="text-muted-foreground hover:text-foreground">
+                {children}
+            </Button>
         </Link>
     );
 }
