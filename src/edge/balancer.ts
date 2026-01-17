@@ -200,6 +200,16 @@ export async function handleRequest(
 
                     setStandardTags(decision, features.path, policyVersion);
 
+                    const latency = Date.now() - startTime;
+                    recordMetric({
+                        requestId: features.requestId,
+                        decision,
+                        path: features.path,
+                        method: features.method,
+                        latencyMs: latency,
+                        statusCode: 429,
+                    }, request.url);
+
                     return createThrottleResponse(
                         features.requestId,
                         Math.ceil((rateResult.retryAfterMs ?? 60000) / 1000),
@@ -272,9 +282,21 @@ export async function handleRequest(
                     setStandardTags(decision, features.path, policyVersion, undefined, botResult.bucket);
 
                     console.log('[Balancer] Executing decision action:', decision);
+                    const latency = Date.now() - startTime;
+                    
                     switch (decision) {
                         case 'block':
                             console.log('[Balancer] Creating block response');
+                            recordMetric({
+                                requestId: features.requestId,
+                                decision,
+                                path: features.path,
+                                method: features.method,
+                                latencyMs: latency,
+                                botScore: botResult.score,
+                                botBucket: botResult.bucket,
+                                statusCode: 403,
+                            }, request.url);
                             return createBlockResponse(features.requestId);
 
                         case 'challenge':
@@ -285,6 +307,17 @@ export async function handleRequest(
 
                             console.log('[Balancer] Creating challenge response. Absolute URL:', absoluteChallengeUrl);
 
+                            recordMetric({
+                                requestId: features.requestId,
+                                decision,
+                                path: features.path,
+                                method: features.method,
+                                latencyMs: latency,
+                                botScore: botResult.score,
+                                botBucket: botResult.bucket,
+                                statusCode: 302,
+                            }, request.url);
+
                             return createChallengeResponse(
                                 features.requestId,
                                 absoluteChallengeUrl,
@@ -293,6 +326,16 @@ export async function handleRequest(
 
                         case 'throttle':
                             console.log('[Balancer] Creating throttle response');
+                            recordMetric({
+                                requestId: features.requestId,
+                                decision,
+                                path: features.path,
+                                method: features.method,
+                                latencyMs: latency,
+                                botScore: botResult.score,
+                                botBucket: botResult.bucket,
+                                statusCode: 429,
+                            }, request.url);
                             return createThrottleResponse(features.requestId, 30, 0);
 
                         case 'reroute':
@@ -381,6 +424,18 @@ export async function handleRequest(
                     responseHeaders.set(key, value);
                 }
 
+                // Record metric for successful request
+                const totalLatency = Date.now() - startTime;
+                recordMetric({
+                    requestId: features.requestId,
+                    decision,
+                    path: features.path,
+                    method: features.method,
+                    backendId: lbResult.backend.id,
+                    latencyMs: totalLatency,
+                    statusCode: response.status,
+                }, request.url);
+
                 return new Response(response.body, {
                     status: response.status,
                     statusText: response.statusText,
@@ -410,15 +465,64 @@ export async function handleRequest(
 }
 
 /**
+ * Record request metric asynchronously (fire and forget)
+ */
+function recordMetric(
+    data: {
+        requestId: string;
+        decision: DecisionAction;
+        path?: string;
+        method?: string;
+        backendId?: string;
+        latencyMs: number;
+        botScore?: number;
+        botBucket?: 'low' | 'medium' | 'high';
+        statusCode?: number;
+    },
+    baseUrl?: string
+): void {
+    // Construct absolute URL for metrics endpoint
+    let metricsUrl = '/internal/api/metrics/record';
+    if (baseUrl) {
+        try {
+            const url = new URL(baseUrl);
+            metricsUrl = `${url.protocol}//${url.host}/internal/api/metrics/record`;
+        } catch {
+            // Fallback to relative URL if parsing fails
+        }
+    }
+
+    // Fire and forget - don't block response
+    fetch(metricsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            requestId: data.requestId,
+            timestamp: new Date().toISOString(),
+            decision: data.decision,
+            path: data.path,
+            method: data.method,
+            backendId: data.backendId,
+            latencyMs: data.latencyMs,
+            botScore: data.botScore,
+            botBucket: data.botBucket,
+            statusCode: data.statusCode,
+        }),
+    }).catch((error) => {
+        // Silently fail - metrics recording shouldn't break requests
+        console.error('[Balancer] Failed to record metric:', error);
+    });
+}
+
+/**
  * Check if path should be excluded from load balancer
  */
 export function shouldExcludePath(path: string): boolean {
     const excludedPatterns = [
         /^\/_next\//,           // Next.js internal
-        /^\/api\/health$/,      // Health check
         /^\/favicon\.ico$/,     // Favicon
         /^\/robots\.txt$/,      // Robots
-        /^\/internal/,          // Admin routes
+        /^\/internal/,          // All internal routes (admin, API, cron, health, etc.)
         /^\/challenge/,         // Challenge page
     ];
 

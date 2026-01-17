@@ -78,9 +78,10 @@ export const config = {
          * - api/auth (auth routes)
          * - api/cron (cron jobs)
          * - api/health (internal health check)
+         * - internal (all internal routes including admin, API, cron, health)
          * - challenge (challenge page)
          * - images/files
          */
-        '/((?!_next/static|_next/image|favicon.ico|sentry-example-page|api/auth|api/cron|api/health|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|internal|sentry-example-page|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 };
