@@ -5,43 +5,15 @@
 import * as Sentry from "@sentry/nextjs";
 
 Sentry.init({
-    dsn: process.env.SENTRY_DSN,
+  dsn: "https://a4d63e6d952fb6e7beda8d0e86ad4623@o4506425574227968.ingest.us.sentry.io/4510723666018304",
 
-    // Performance monitoring
-    tracesSampleRate: parseFloat(process.env.TELEMETRY_SAMPLE_RATE || '0.1'),
+  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
+  tracesSampleRate: 1,
 
-    // Set up profiling for performance insights
-    profilesSampleRate: 0.1,
+  // Enable logs to be sent to Sentry
+  enableLogs: true,
 
-    // Error sampling
-    sampleRate: 1.0,
-
-    // Environment
-    environment: process.env.NODE_ENV || 'development',
-
-    // Release tracking
-    release: process.env.VERCEL_GIT_COMMIT_SHA,
-
-    // Additional integrations
-    integrations: [
-        Sentry.captureConsoleIntegration({
-            levels: ['error', 'warn'],
-        }),
-    ],
-
-    // Filter out non-critical errors
-    beforeSend(event) {
-        // Don't send events for expected errors
-        if (event.exception?.values?.[0]?.type === 'AbortError') {
-            return null;
-        }
-        return event;
-    },
-
-    // Tag all events with runtime
-    initialScope: {
-        tags: {
-            runtime: 'nodejs',
-        },
-    },
+  // Enable sending user PII (Personally Identifiable Information)
+  // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
+  sendDefaultPii: true,
 });
