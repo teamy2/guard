@@ -68,6 +68,11 @@ export async function middleware(request: NextRequest, event: any) {
 
     // Only run auth middleware for /internal/ paths
     if (path.startsWith('/internal/')) {
+        // Allow challenge-related APIs to bypass auth (users need to access these without being logged in)
+        if (path.startsWith('/internal/api/challenge/')) {
+            return NextResponse.next();
+        }
+
         // Allow metrics endpoint to bypass auth if valid API key is provided
         if (path === '/internal/api/metrics/record' && verifyMetricsAuth(request)) {
             return NextResponse.next();
