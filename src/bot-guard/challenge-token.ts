@@ -1,7 +1,7 @@
 import * as jose from 'jose';
 
 const ALGORITHM = 'HS256';
-const TOKEN_VALIDITY_MS = 3600 * 1000; // 1 hour
+const TOKEN_VALIDITY_MS = 7 * 24 * 3600 * 1000; // 7 days
 
 /**
  * Challenge token payload

@@ -32,6 +32,7 @@ import type {
     RoutePolicy,
     RequestFeatures,
     DecisionAction,
+    BotScoringResult,
 } from '@/config/schema';
 
 /**
@@ -166,11 +167,12 @@ export async function handleRequest(
 
                 // 3. Check for valid challenge token (skip further checks if valid)
                 const existingToken = extractToken(request);
+                let isValidatedHuman = false;
                 if (existingToken) {
                     const tokenResult = await validateToken(existingToken, features.ipHash, challengeSecret);
                     if (tokenResult.valid) {
                         addDecisionBreadcrumb('challenge', 'Valid challenge token', {});
-                        // Skip bot check for validated humans
+                        isValidatedHuman = true;
                     }
                 }
 
@@ -207,22 +209,33 @@ export async function handleRequest(
                 }
 
                 // 5. Bot detection
-                Sentry.addBreadcrumb({ category: 'debug', message: 'Evaluating bot score...' });
-                const aiConfig = process.env.AI_CLASSIFIER_URL ? {
-                    url: process.env.AI_CLASSIFIER_URL,
-                    apiKey: process.env.AI_CLASSIFIER_API_KEY || '',
-                    timeoutMs: parseInt(process.env.AI_CLASSIFIER_TIMEOUT_MS || '50', 10),
-                } : undefined;
+                let botResult: BotScoringResult;
+                if (isValidatedHuman) {
+                    botResult = {
+                        score: 0,
+                        bucket: 'low',
+                        decision: 'allow',
+                        reasons: [{ rule: 'challenge_token', weight: 0, triggered: true, explanation: 'Valid challenge token' }]
+                    };
+                } else {
+                    Sentry.addBreadcrumb({ category: 'debug', message: 'Evaluating bot score...' });
+                    const aiConfig = process.env.AI_CLASSIFIER_URL ? {
+                        url: process.env.AI_CLASSIFIER_URL,
+                        apiKey: process.env.AI_CLASSIFIER_API_KEY || '',
+                        timeoutMs: parseInt(process.env.AI_CLASSIFIER_TIMEOUT_MS || '50', 10),
+                    } : undefined;
 
-                const botResult = await withSpanAsync(
-                    SpanOps.BOT_HEURISTICS,
-                    'Evaluate bot score',
-                    () => makeDecision(features, botConfig, {
-                        ipAllowlist: policy?.ipAllowlist,
-                        ipBlocklist: policy?.ipBlocklist,
-                        aiConfig: botConfig.useAiClassifier ? aiConfig : undefined,
-                    })
-                );
+                    botResult = await withSpanAsync(
+                        SpanOps.BOT_HEURISTICS,
+                        'Evaluate bot score',
+                        () => makeDecision(features, botConfig, {
+                            ipAllowlist: policy?.ipAllowlist,
+                            ipBlocklist: policy?.ipBlocklist,
+                            aiConfig: botConfig.useAiClassifier ? aiConfig : undefined,
+                        })
+                    );
+                }
+
                 Sentry.addBreadcrumb({
                     category: 'debug',
                     message: 'Bot score calculated',
