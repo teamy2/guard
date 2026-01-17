@@ -245,16 +245,16 @@ export async function handleRequest(
                     });
 
                     decision = botResult.decision;
-                    addDecisionBreadcrumb('bot', `Bot decision: ${decision}`, {
+                    /*addDecisionBreadcrumb('bot', `Bot decision: ${decision}`, {
                         score: botResult.score,
                         bucket: botResult.bucket,
                         reasons: botResult.reasons.filter(r => r.triggered).map(r => r.rule),
-                    });
+                    });*/
 
-                    if (shouldEmitTelemetry) {
+                    /*if (shouldEmitTelemetry) {
                         incrementBotActionCounter(decision, features.path);
                         incrementRequestCounter(decision, features.path, undefined);
-                    }
+                    }*/
 
                     setStandardTags(decision, features.path, policyVersion, undefined, botResult.bucket);
 
