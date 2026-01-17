@@ -237,6 +237,13 @@ export async function handleRequest(
 
                 // Handle bot decision
                 if (botResult.decision !== 'allow') {
+                    console.log('!!! BOT DETECTED !!!', {
+                        action: botResult.decision,
+                        score: botResult.score,
+                        reasons: botResult.reasons.filter(r => r.triggered).map(r => r.rule),
+                        bucket: botResult.bucket
+                    });
+
                     decision = botResult.decision;
                     addDecisionBreadcrumb('bot', `Bot decision: ${decision}`, {
                         score: botResult.score,

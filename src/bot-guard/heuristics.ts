@@ -234,6 +234,7 @@ export function calculateBotScore(features: RequestFeatures): {
 
         totalWeight += rule.weight;
         if (result.triggered) {
+            console.log(`[Heuristics] Rule triggered: "${rule.name}" (weight: ${rule.weight}) - ${result.explanation}`);
             triggeredWeight += rule.weight;
         }
     }

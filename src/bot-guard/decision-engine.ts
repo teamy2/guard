@@ -174,15 +174,23 @@ export async function makeDecision(
 
     // 2. Run heuristics-based scoring
     const heuristicResult = evaluateBotScore(features, config);
+    console.log('[DecisionEngine] Heuristic result:', {
+        score: heuristicResult.score,
+        triggered: heuristicResult.reasons.filter(r => r.triggered).map(r => r.rule)
+    });
 
     // 3. Optionally enhance with AI classifier
     if (config.useAiClassifier && options.aiConfig) {
+        console.log('[DecisionEngine] AI classification enabled');
         const featureSummary = createAIFeatureSummary(features);
         const aiResult = await callAIClassifier(featureSummary, options.aiConfig);
+
+        console.log('[DecisionEngine] AI raw response:', aiResult);
 
         if (aiResult) {
             // Blend AI result with heuristics (AI weighted at 40%)
             const blendedScore = heuristicResult.score * 0.6 + aiResult.probability * 0.4;
+            console.log('[DecisionEngine] Blended score:', blendedScore, '(Heuristic:', heuristicResult.score, 'AI:', aiResult.probability, ')');
 
             return {
                 ...heuristicResult,
@@ -195,6 +203,8 @@ export async function makeDecision(
                         : config.actions.low,
                 aiResult,
             };
+        } else {
+            console.log('[DecisionEngine] AI call returned null/failed, using heuristic score');
         }
     }
 
