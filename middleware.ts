@@ -51,6 +51,6 @@ export const config = {
          * - api/health (internal health check)
          * - challenge (challenge page)
          */
-        '/((?!_next/static|_next/image|favicon.ico|internal|api/auth|api/cron|api/health|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|internal|sentry-example-page|api/auth|api/cron|api/health|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 };
