@@ -63,7 +63,7 @@ export default withSentryConfig(nextConfig, {
 
   org: "matthew-az",
 
-  project: "uottahack8",
+  project: "guard",
 
   // Only print logs for uploading source maps in CI
   silent: !process.env.CI,

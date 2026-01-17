@@ -111,14 +111,13 @@ export const config = {
          * - _next/static (static files)
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
-         * - public folder
          * - sentry-example-page
          * - challenge (challenge page)
-         * - images/files
          * 
-         * Note: We include /internal/ paths so auth middleware can run on them,
+         * Note: Public folder files (served at root) are now intercepted by middleware.
+         * We include /internal/ paths so auth middleware can run on them,
          * but exclude them from balancer processing in shouldExcludePath()
          */
-        '/((?!_next/static|_next/image|favicon.ico|sentry-example-page|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|sentry-example-page|challenge).*)',
     ],
 };
