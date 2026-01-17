@@ -45,7 +45,12 @@ export const config = {
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - public folder
+         * - api/admin (admin API)
+         * - api/cron (cron jobs)
+         * - api/health (internal health check)
+         * - dashboard (admin UI)
+         * - challenge (challenge page)
          */
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|api/admin|api/cron|api/health|dashboard|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 };

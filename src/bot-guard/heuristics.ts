@@ -238,8 +238,9 @@ export function calculateBotScore(features: RequestFeatures): {
         }
     }
 
-    // Normalize score to 0-1 range
-    const score = totalWeight > 0 ? triggeredWeight / totalWeight : 0;
+    // Calculate additive score capped at 1.0
+    // Each rule's weight represents its direct contribution to the probability
+    const score = Math.min(1, triggeredWeight);
 
     return { score, reasons };
 }
@@ -252,7 +253,8 @@ export function getBotBucket(
     thresholds: { low: number; medium: number; high: number }
 ): 'low' | 'medium' | 'high' {
     if (score >= thresholds.high) return 'high';
-    if (score >= thresholds.medium) return 'medium';
+    // Use low threshold as the start of medium bucket (i.e. if score > low, it's at least medium)
+    if (score >= thresholds.low) return 'medium';
     return 'low';
 }
 
