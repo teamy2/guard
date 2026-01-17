@@ -207,6 +207,7 @@ export interface RequestMetric {
   latencyMs?: number;
   botScore?: number;
   botBucket?: 'low' | 'medium' | 'high';
+  botReason?: string; // Top triggered reason rule name
   statusCode?: number;
 }
 
@@ -231,6 +232,7 @@ export async function recordRequestMetric(metric: RequestMetric): Promise<void> 
         latency_ms,
         bot_score,
         bot_bucket,
+        bot_reason,
         status_code
       )
       VALUES (
@@ -243,6 +245,7 @@ export async function recordRequestMetric(metric: RequestMetric): Promise<void> 
         ${metric.latencyMs || null},
         ${metric.botScore || null},
         ${metric.botBucket || null},
+        ${metric.botReason || null},
         ${metric.statusCode || null}
       )
     `;
@@ -361,7 +364,7 @@ export async function getBotStats(hours: number = 1): Promise<{
       decision,
       COUNT(*) as count
     FROM request_metrics
-    WHERE timestamp >= ${since} AND decision IN ('block', 'challenge', 'throttle')
+    WHERE timestamp >= ${since} AND decision IN ('block', 'challenge', 'throttle', 'allow')
     GROUP BY decision
   `;
 
@@ -370,11 +373,31 @@ export async function getBotStats(hours: number = 1): Promise<{
     actions[row.decision as string] = parseInt(row.count as string, 10);
   }
 
-  // For top reasons, we'd need to store that separately or parse from other data
-  // For now, return empty array
+  // Get top bot detection reasons
+  const reasonCounts = await sql`
+    SELECT 
+      bot_reason,
+      COUNT(*) as count
+    FROM request_metrics
+    WHERE timestamp >= ${since} 
+      AND bot_reason IS NOT NULL
+      AND bot_reason != ''
+    GROUP BY bot_reason
+    ORDER BY count DESC
+    LIMIT 10
+  `;
+
+  const totalWithReasons = reasonCounts.rows.reduce((sum, row) => sum + parseInt(row.count as string, 10), 0);
+
+  const topReasons = reasonCounts.rows.map(row => ({
+    rule: row.bot_reason as string,
+    count: parseInt(row.count as string, 10),
+    percentage: totalWithReasons > 0 ? (parseInt(row.count as string, 10) / totalWithReasons) * 100 : 0,
+  }));
+
   return {
     scoreBuckets,
-    topReasons: [],
+    topReasons,
     actions,
   };
 }
@@ -431,6 +454,7 @@ export async function initializeDatabase(): Promise<void> {
       latency_ms INTEGER,
       bot_score REAL,
       bot_bucket VARCHAR(20),
+      bot_reason VARCHAR(100),
       status_code INTEGER,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )

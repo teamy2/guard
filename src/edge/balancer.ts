@@ -124,6 +124,7 @@ export async function handleRequest(
             let decision: DecisionAction = 'allow';
             let policyVersion = config.version;
             let backendId: string | undefined;
+            let botResult: BotScoringResult | undefined;
 
             try {
                 // 1. Extract features
@@ -219,7 +220,6 @@ export async function handleRequest(
                 }
 
                 // 5. Bot detection
-                let botResult: BotScoringResult;
                 if (isValidatedHuman) {
                     botResult = {
                         score: 0,
@@ -260,6 +260,10 @@ export async function handleRequest(
 
                 // Handle bot decision
                 if (botResult.decision !== 'allow') {
+                    // Get top triggered reason for metrics
+                    const topTriggeredReason = botResult.reasons
+                        .filter(r => r.triggered)
+                        .sort((a, b) => b.weight - a.weight)[0]?.rule;
                     console.log('!!! BOT DETECTED !!!', {
                         action: botResult.decision,
                         score: botResult.score,
@@ -295,6 +299,7 @@ export async function handleRequest(
                                 latencyMs: latency,
                                 botScore: botResult.score,
                                 botBucket: botResult.bucket,
+                                botReason: topTriggeredReason,
                                 statusCode: 403,
                             }, request.url);
                             return createBlockResponse(features.requestId);
@@ -315,6 +320,7 @@ export async function handleRequest(
                                 latencyMs: latency,
                                 botScore: botResult.score,
                                 botBucket: botResult.bucket,
+                                botReason: topTriggeredReason,
                                 statusCode: 302,
                             }, request.url);
 
@@ -334,6 +340,7 @@ export async function handleRequest(
                                 latencyMs: latency,
                                 botScore: botResult.score,
                                 botBucket: botResult.bucket,
+                                botReason: topTriggeredReason,
                                 statusCode: 429,
                             }, request.url);
                             return createThrottleResponse(features.requestId, 30, 0);
@@ -426,6 +433,11 @@ export async function handleRequest(
 
                 // Record metric for successful request
                 const totalLatency = Date.now() - startTime;
+                // Get top triggered reason if bot detection ran
+                const topTriggeredReasonForAllow = botResult?.reasons
+                    .filter(r => r.triggered)
+                    .sort((a, b) => b.weight - a.weight)[0]?.rule;
+                
                 recordMetric({
                     requestId: features.requestId,
                     decision,
@@ -433,6 +445,9 @@ export async function handleRequest(
                     method: features.method,
                     backendId: lbResult.backend.id,
                     latencyMs: totalLatency,
+                    botScore: botResult?.score,
+                    botBucket: botResult?.bucket,
+                    botReason: topTriggeredReasonForAllow,
                     statusCode: response.status,
                 }, request.url);
 
@@ -477,6 +492,7 @@ function recordMetric(
         latencyMs: number;
         botScore?: number;
         botBucket?: 'low' | 'medium' | 'high';
+        botReason?: string; // Top triggered reason
         statusCode?: number;
     },
     baseUrl?: string
@@ -516,6 +532,7 @@ function recordMetric(
             latencyMs: data.latencyMs,
             botScore: data.botScore,
             botBucket: data.botBucket,
+            botReason: data.botReason,
             statusCode: data.statusCode,
         }),
     }).catch((error) => {
