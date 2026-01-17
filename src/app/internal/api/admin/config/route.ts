@@ -10,24 +10,10 @@ import { invalidateConfigCache } from '@/config/loader';
 import { GlobalConfigSchema } from '@/config/schema';
 import * as Sentry from '@sentry/nextjs';
 
-import { neonAuth } from "@neondatabase/auth/next/server";
-
-/**
- * Verify admin auth using Neon Auth
- */
-async function verifyAdminAuth(request: NextRequest): Promise<boolean> {
-    const { session } = await neonAuth();
-    return !!session;
-}
-
 /**
  * GET - List all configs or get active config
  */
 export async function GET(request: NextRequest) {
-    if (!(await verifyAdminAuth(request))) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
         const { searchParams } = new URL(request.url);
         const listAll = searchParams.get('list') === 'true';
@@ -52,10 +38,6 @@ export async function GET(request: NextRequest) {
  * POST - Create or update config
  */
 export async function POST(request: NextRequest) {
-    if (!(await verifyAdminAuth(request))) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
         const body = await request.json();
 
@@ -93,10 +75,6 @@ export async function POST(request: NextRequest) {
  * PUT - Activate a draft config
  */
 export async function PUT(request: NextRequest) {
-    if (!(await verifyAdminAuth(request))) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
         const body = await request.json();
         const { version } = body;
@@ -128,10 +106,6 @@ export async function PUT(request: NextRequest) {
  * DELETE - Delete a draft config
  */
 export async function DELETE(request: NextRequest) {
-    if (!(await verifyAdminAuth(request))) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
         const { searchParams } = new URL(request.url);
         const version = searchParams.get('version');

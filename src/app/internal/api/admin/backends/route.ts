@@ -3,27 +3,9 @@ import { getAllBackendHealth } from '@/config/storage';
 import * as Sentry from '@sentry/nextjs';
 
 /**
- * Verify admin API key
- */
-function verifyAdminAuth(request: NextRequest): boolean {
-    const authHeader = request.headers.get('authorization');
-    const apiKey = process.env.ADMIN_API_KEY;
-
-    if (!apiKey) {
-        return process.env.NODE_ENV === 'development';
-    }
-
-    return authHeader === `Bearer ${apiKey}`;
-}
-
-/**
  * GET - Get all backend health status
  */
 export async function GET(request: NextRequest) {
-    if (!verifyAdminAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
         const health = await getAllBackendHealth();
 
