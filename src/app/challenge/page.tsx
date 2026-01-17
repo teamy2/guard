@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 function ChallengeForm() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const returnPath = searchParams.get('return') || '/';
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -30,23 +31,21 @@ function ChallengeForm() {
                     challengeResponse: token,
                     returnPath,
                 }),
+                redirect: 'manual', // Don't follow redirects automatically
             });
 
-            // Check if it's a redirect (307/302) or success
-            if (response.status === 307 || response.status === 302) {
-                // Server redirect - follow the Location header
-                const location = response.headers.get('Location') || returnPath;
-                window.location.href = location;
-            } else if (response.ok) {
-                // Success response - redirect to return path
-                window.location.href = returnPath;
+            if (response.ok) {
+                // Success - cookie is set, now redirect using Next.js router
+                router.push(returnPath);
             } else {
+                // Error response
                 const data = await response.json().catch(() => ({ error: 'Verification failed' }));
                 setError(data.error || 'Verification failed. Please try again.');
+                setLoading(false);
             }
-        } catch {
+        } catch (err) {
+            console.error('[Challenge] Error:', err);
             setError('An error occurred. Please try again.');
-        } finally {
             setLoading(false);
         }
     };

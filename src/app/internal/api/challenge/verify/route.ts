@@ -58,19 +58,16 @@ export async function POST(request: NextRequest) {
         const challengeSecret = process.env.CHALLENGE_SECRET || 'default-secret';
         const token = await issueToken(features.ipHash, returnPath || '/', challengeSecret);
 
-        // Create redirect response
-        const redirectUrl = returnPath || '/';
-        let response: NextResponse;
-        
-        try {
-            // Try to create absolute URL for redirect
-            const baseUrl = new URL(request.url);
-            const targetUrl = new URL(redirectUrl, baseUrl.origin);
-            response = NextResponse.redirect(targetUrl);
-        } catch {
-            // Fallback to relative redirect
-            response = NextResponse.redirect(new URL(redirectUrl, request.url));
-        }
+        // Return JSON response with success status
+        // The client will handle the redirect using Next.js router
+        const response = NextResponse.json(
+            { 
+                success: true,
+                message: 'Challenge verified successfully',
+                returnPath: returnPath || '/',
+            },
+            { status: 200 }
+        );
 
         // Set the cookie with proper attributes
         const isSecure = request.url.startsWith('https') || process.env.NODE_ENV === 'production';
