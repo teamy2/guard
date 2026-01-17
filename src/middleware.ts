@@ -45,24 +45,32 @@ const authMiddleware = neonAuthMiddleware({
 });
 
 export async function middleware(request: NextRequest, event: any) {
-    // Run auth middleware first
-    // Note: neonAuthMiddleware returns a NextMiddleware which takes request and event
-    const authRes = await authMiddleware(request);
+    const path = new URL(request.url).pathname;
 
-    // If auth middleware returned a response (redirect or something), return it
-    if (authRes && authRes.status !== 200) {
-        // If it's a redirect to the login page, append the current URL as redirectTo
-        if ((authRes.status === 307 || authRes.status === 302) && authRes.headers.get('Location')?.includes('/sign-in')) {
-            const location = authRes.headers.get('Location');
-            const url = new URL(location!, request.url);
-            url.searchParams.set('redirectTo', request.url);
+    // Only run auth middleware for /internal/ paths
+    if (path.startsWith('/internal/')) {
+        // Run auth middleware
+        // Note: neonAuthMiddleware returns a NextMiddleware which takes request and event
+        const authRes = await authMiddleware(request);
 
-            return NextResponse.redirect(url);
+        // If auth middleware returned a response (redirect or something), return it
+        if (authRes && authRes.status !== 200) {
+            // If it's a redirect to the login page, append the current URL as redirectTo
+            if ((authRes.status === 307 || authRes.status === 302) && authRes.headers.get('Location')?.includes('/sign-in')) {
+                const location = authRes.headers.get('Location');
+                const url = new URL(location!, request.url);
+                url.searchParams.set('redirectTo', request.url);
+
+                return NextResponse.redirect(url);
+            }
+            return authRes;
         }
-        return authRes;
+
+        // Auth passed, let the request continue to the route handler
+        return NextResponse.next();
     }
 
-    // Otherwise, continue to balancer logic
+    // For non-internal paths, run balancer logic
     return balancerMiddleware(request);
 }
 
@@ -75,10 +83,13 @@ export const config = {
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - public folder
-         * - internal (all internal routes including admin, API, auth, cron, health)
+         * - sentry-example-page
          * - challenge (challenge page)
          * - images/files
+         * 
+         * Note: We include /internal/ paths so auth middleware can run on them,
+         * but exclude them from balancer processing in shouldExcludePath()
          */
-        '/((?!_next/static|_next/image|favicon.ico|internal|sentry-example-page|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|sentry-example-page|challenge|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 };
