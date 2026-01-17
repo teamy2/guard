@@ -117,11 +117,20 @@ export async function handleRequest(
 
             try {
                 // 1. Extract features
+                Sentry.addBreadcrumb({ category: 'debug', message: 'Extracting features...' });
                 features = await withSpanAsync(
                     SpanOps.FEATURE_EXTRACT,
                     'Extract request features',
                     () => extractFeatures(request, ipSalt)
                 );
+                Sentry.addBreadcrumb({
+                    category: 'debug',
+                    message: 'Features extracted',
+                    data: {
+                        ipHash: features.ipHash.substring(0, 8),
+                        uaLength: features.userAgent.length
+                    }
+                });
 
                 // 2. Match policy
                 const policyMatch = matchPolicy(features.path, features.method, config);
@@ -157,6 +166,7 @@ export async function handleRequest(
                 }
 
                 // 4. Rate limiting
+                Sentry.addBreadcrumb({ category: 'debug', message: 'Checking rate limit...' });
                 const rateResult = await withSpanAsync(
                     SpanOps.RATE_LIMIT,
                     'Check rate limits',
@@ -188,6 +198,7 @@ export async function handleRequest(
                 }
 
                 // 5. Bot detection
+                Sentry.addBreadcrumb({ category: 'debug', message: 'Evaluating bot score...' });
                 const aiConfig = process.env.AI_CLASSIFIER_URL ? {
                     url: process.env.AI_CLASSIFIER_URL,
                     apiKey: process.env.AI_CLASSIFIER_API_KEY || '',
@@ -203,6 +214,11 @@ export async function handleRequest(
                         aiConfig: botConfig.useAiClassifier ? aiConfig : undefined,
                     })
                 );
+                Sentry.addBreadcrumb({
+                    category: 'debug',
+                    message: 'Bot score calculated',
+                    data: { score: botResult.score }
+                });
 
                 setBotContext(botResult);
 
