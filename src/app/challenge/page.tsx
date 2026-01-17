@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Turnstile } from '@marsidev/react-turnstile';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 function ChallengeForm() {
     const searchParams = useSearchParams();
@@ -68,16 +68,17 @@ function ChallengeForm() {
                         This is a protective measure to ensure security.
                     </p>
 
-                    {/* Replace placeholder with Turnstile widget */}
+                    {/* hCaptcha widget */}
                     <div className="flex justify-center mb-4">
-                        <Turnstile
-                            siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ''}
-                            onSuccess={(token) => {
+                        <HCaptcha
+                            sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || ''}
+                            onVerify={(token) => {
                                 setToken(token);
                                 setError('');
                             }}
-                            onError={() => setError('Turnstile failed to load. Please refresh.')}
+                            onError={() => setError('hCaptcha failed to load. Please refresh.')}
                             onExpire={() => setToken('')}
+                            theme="dark"
                         />
                     </div>
                 </div>

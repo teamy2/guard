@@ -12,33 +12,38 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { challengeResponse, returnPath } = body;
 
-        // Verify the Turnstile CAPTCHA response
-        const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
-        if (!turnstileSecret) {
-            console.error('[Challenge] Missing TURNSTILE_SECRET_KEY');
+        // Verify the hCaptcha response
+        const hcaptchaSecret = process.env.HCAPTCHA_SECRET_KEY;
+        if (!hcaptchaSecret) {
+            console.error('[Challenge] Missing HCAPTCHA_SECRET_KEY');
             return NextResponse.json(
                 { error: 'Server configuration error' },
                 { status: 500 }
             );
         }
 
+        // hCaptcha siteverify expects application/x-www-form-urlencoded or multipart/form-data
+        const formData = new URLSearchParams();
+        formData.append('secret', hcaptchaSecret);
+        formData.append('response', challengeResponse);
+        const remoteIP = request.headers.get('x-real-ip');
+        if (remoteIP) {
+            formData.append('remoteip', remoteIP);
+        }
+
         const verifyResponse = await fetch(
-            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+            'https://hcaptcha.com/siteverify',
             {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    secret: turnstileSecret,
-                    response: challengeResponse,
-                    remoteip: request.headers.get('x-real-ip') || undefined,
-                }),
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData.toString(),
             }
         );
 
         const verifyData = await verifyResponse.json();
 
         if (!verifyData.success) {
-            console.warn('[Challenge] Turnstile verification failed:', verifyData['error-codes']);
+            console.warn('[Challenge] hCaptcha verification failed:', verifyData['error-codes']);
             return NextResponse.json(
                 { error: 'Verification failed. Please try again.' },
                 { status: 400 }

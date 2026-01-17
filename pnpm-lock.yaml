@@ -8,9 +8,9 @@ importers:
 
   .:
     dependencies:
-      '@marsidev/react-turnstile':
-        specifier: ^1.4.1
-        version: 1.4.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@hcaptcha/react-hcaptcha':
+        specifier: ^2.0.1
+        version: 2.0.1
       '@neondatabase/neon-auth-next':
         specifier: 0.1.0-alpha.24
         version: 0.1.0-alpha.24(next@16.1.3(@babel/core@7.28.6)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -716,6 +716,9 @@ packages:
     peerDependencies:
       react: '>= 16.3.0'
       react-dom: '>= 16.3.0'
+
+  '@hcaptcha/react-hcaptcha@2.0.1':
+    resolution: {integrity: sha512-SOm/YBN8TGEFrf18R3LLGJJz9dkzsSgi8WAaDZzjkk4sYIxM6CYLdjl9JreqF+sn8Z5N9PZDpixsey26PsdCBg==}
 
   '@hookform/resolvers@5.2.2':
     resolution: {integrity: sha512-A/IxlMLShx3KjV/HeTcTfaMxdwy690+L/ZADoeaTltLx+CVuzkeVIPuybK3jrRfw7YZnmdKsVVHAlEPIAEUNlA==}
@@ -5986,6 +5989,8 @@ snapshots:
       '@hcaptcha/loader': 2.3.0
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
+
+  '@hcaptcha/react-hcaptcha@2.0.1': {}
 
   '@hookform/resolvers@5.2.2(react-hook-form@7.71.1(react@19.2.3))':
     dependencies:
