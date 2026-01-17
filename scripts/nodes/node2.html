@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Node 2</title>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --fg: #ededed;
+            --border: #333;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .card {
+            border: 1px solid var(--border);
+            padding: 2rem;
+            width: 320px;
+            background: #000;
+        }
+
+        .header {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status {
+            width: 8px;
+            height: 8px;
+            border: 1px solid #666;
+            border-radius: 50%;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+            color: #888;
+        }
+
+        .metric span.val {
+            color: var(--fg);
+            font-family: monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <div class="header">
+            <h1>Node 2</h1>
+            <div class="status"></div>
+        </div>
+        <div class="metric">
+            <span>ID</span>
+            <span class="val">srv-02</span>
+        </div>
+        <div class="metric">
+            <span>Region</span>
+            <span class="val">eu-west</span>
+        </div>
+        <div class="metric">
+            <span>Latency</span>
+            <span class="val">14ms</span>
+        </div>
+        <div class="metric">
+            <span>Status</span>
+            <span class="val">Standby</span>
+        </div>
+    </div>
+</body>
+
+</html>
