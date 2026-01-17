@@ -71,7 +71,7 @@ function createDefaultPolicy(backendIds: string[]): RoutePolicy {
 
 export default function PoliciesPage() {
     const [config, setConfig] = useState<GlobalConfig>(createDefaultConfig());
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [activeTab, setActiveTab] = useState<Tab>('view');
     const [error, setError] = useState('');
