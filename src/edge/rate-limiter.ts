@@ -111,11 +111,14 @@ export async function checkRateLimit(
         const allowed = count <= config.maxRequests ||
             (config.burstLimit !== undefined && count <= config.maxRequests + config.burstLimit);
 
+        // Calculate retryAfterMs as time remaining until reset (decreases over time)
+        const retryAfterMs = allowed ? undefined : Math.max(0, resetAt - Date.now());
+
         return {
             allowed,
             remaining,
             resetAt,
-            retryAfterMs: allowed ? undefined : config.retryAfterMs,
+            retryAfterMs,
             keyType: config.keyType,
             key,
         };

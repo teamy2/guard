@@ -1,37 +1,51 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 function ChallengeForm() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const returnPath = searchParams.get('return') || '/';
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [token, setToken] = useState<string>('');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!token) {
+            setError('Please complete the security check.');
+            return;
+        }
+
         setLoading(true);
         setError('');
 
         try {
-            const response = await fetch('/api/challenge/verify', {
+            const response = await fetch('/internal/api/challenge/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    challengeResponse: 'human-verified',
+                    challengeResponse: token,
                     returnPath,
                 }),
+                redirect: 'manual', // Don't follow redirects automatically
             });
 
             if (response.ok) {
-                window.location.href = returnPath;
+                // Success - cookie is set, now redirect using Next.js router
+                router.push(returnPath);
             } else {
-                setError('Verification failed. Please try again.');
+                // Error response
+                const data = await response.json().catch(() => ({ error: 'Verification failed' }));
+                setError(data.error || 'Verification failed. Please try again.');
+                setLoading(false);
             }
-        } catch {
+        } catch (err) {
+            console.error('[Challenge] Error:', err);
             setError('An error occurred. Please try again.');
-        } finally {
             setLoading(false);
         }
     };
@@ -59,11 +73,18 @@ function ChallengeForm() {
                         This is a protective measure to ensure security.
                     </p>
 
-                    {/* In production, integrate with hCaptcha/Turnstile here */}
-                    <div className="h-24 bg-gray-700/50 rounded-lg flex items-center justify-center mb-4">
-                        <span className="text-gray-500 text-sm">
-                            [CAPTCHA Widget - Integrate hCaptcha/Turnstile]
-                        </span>
+                    {/* hCaptcha widget */}
+                    <div className="flex justify-center mb-4">
+                        <HCaptcha
+                            sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || ''}
+                            onVerify={(token) => {
+                                setToken(token);
+                                setError('');
+                            }}
+                            onError={() => setError('hCaptcha failed to load. Please refresh.')}
+                            onExpire={() => setToken('')}
+                            theme="dark"
+                        />
                     </div>
                 </div>
 

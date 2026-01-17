@@ -32,7 +32,7 @@ A production-ready smart load balancer built on Vercel Edge with AI/heuristics-b
 ```bash
 # Clone the repository
 git clone <your-repo-url>
-cd uottahack8
+cd guard
 
 # Install dependencies
 pnpm install

@@ -138,6 +138,114 @@ export function setBotContext(result: BotScoringResult): void {
         reasons: result.reasons.filter(r => r.triggered).map(r => r.rule),
         ai_probability: result.aiResult?.probability,
         ai_categories: result.aiResult?.categories,
+        ai_explanation: result.aiResult?.explanation,
+    });
+}
+
+/**
+ * Track AI classifier performance metrics
+ */
+export function trackAIClassifierPerformance(
+    heuristicScore: number,
+    aiScore: number,
+    finalScore: number,
+    decision: DecisionAction,
+    route: string
+): void {
+    const span = Sentry.getActiveSpan();
+    if (span) {
+        // Calculate score difference (model drift indicator)
+        const scoreDifference = Math.abs(heuristicScore - aiScore);
+        const scoreAgreement = scoreDifference < 0.2; // Within 20% = agreement
+        
+        span.setAttribute('ai.heuristic_score', heuristicScore);
+        span.setAttribute('ai.ai_score', aiScore);
+        span.setAttribute('ai.final_score', finalScore);
+        span.setAttribute('ai.score_difference', scoreDifference);
+        span.setAttribute('ai.agreement', scoreAgreement);
+        span.setAttribute('ai.decision', decision);
+        
+        // Track model drift - large differences indicate potential issues
+        if (scoreDifference > 0.5) {
+            span.setAttribute('ai.model_drift_warning', true);
+            Sentry.addBreadcrumb({
+                category: 'ai.performance',
+                message: 'Large score discrepancy detected',
+                level: 'warning',
+                data: {
+                    heuristic_score: heuristicScore,
+                    ai_score: aiScore,
+                    difference: scoreDifference,
+                    route: normalizeRoute(route),
+                },
+            });
+        }
+        
+        // Track false positive/negative indicators
+        // If AI says bot but heuristic says not, or vice versa
+        const heuristicIsBot = heuristicScore >= 0.5;
+        const aiIsBot = aiScore >= 0.5;
+        const disagreement = heuristicIsBot !== aiIsBot;
+        
+        if (disagreement) {
+            span.setAttribute('ai.disagreement', true);
+            Sentry.addBreadcrumb({
+                category: 'ai.performance',
+                message: 'AI and heuristic disagreement',
+                level: 'info',
+                data: {
+                    heuristic_bot: heuristicIsBot,
+                    ai_bot: aiIsBot,
+                    heuristic_score: heuristicScore,
+                    ai_score: aiScore,
+                    route: normalizeRoute(route),
+                },
+            });
+        }
+    }
+    
+    // Log structured data for metrics aggregation
+    logStructured('info', 'ai_classifier_performance', {
+        heuristic_score: heuristicScore,
+        ai_score: aiScore,
+        final_score: finalScore,
+        score_difference: Math.abs(heuristicScore - aiScore),
+        decision,
+        route: normalizeRoute(route),
+    });
+}
+
+/**
+ * Track AI classifier errors and failures
+ */
+export function trackAIClassifierError(
+    error: Error | unknown,
+    features: RequestFeatures,
+    fallbackToHeuristics: boolean
+): void {
+    Sentry.withScope((scope) => {
+        scope.setTag('module', 'ai-classifier');
+        scope.setTag('error_type', 'ai_failure');
+        scope.setContext('ai_error', {
+            fallback_to_heuristics: fallbackToHeuristics,
+            path: features.path,
+            method: features.method,
+            user_agent_length: features.userAgent.length,
+        });
+        
+        if (error instanceof Error) {
+            scope.setContext('error_details', {
+                message: error.message,
+                name: error.name,
+            });
+        }
+        
+        Sentry.captureException(error instanceof Error ? error : new Error(String(error)));
+    });
+    
+    logStructured('warning', 'ai_classifier_error', {
+        fallback_to_heuristics: fallbackToHeuristics,
+        route: normalizeRoute(features.path),
     });
 }
 

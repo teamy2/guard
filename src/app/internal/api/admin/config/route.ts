@@ -11,28 +11,9 @@ import { GlobalConfigSchema } from '@/config/schema';
 import * as Sentry from '@sentry/nextjs';
 
 /**
- * Verify admin API key
- */
-function verifyAdminAuth(request: NextRequest): boolean {
-    const authHeader = request.headers.get('authorization');
-    const apiKey = process.env.ADMIN_API_KEY;
-
-    if (!apiKey) {
-        // In development without key, allow access
-        return process.env.NODE_ENV === 'development';
-    }
-
-    return authHeader === `Bearer ${apiKey}`;
-}
-
-/**
  * GET - List all configs or get active config
  */
 export async function GET(request: NextRequest) {
-    if (!verifyAdminAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
         const { searchParams } = new URL(request.url);
         const listAll = searchParams.get('list') === 'true';
@@ -57,10 +38,6 @@ export async function GET(request: NextRequest) {
  * POST - Create or update config
  */
 export async function POST(request: NextRequest) {
-    if (!verifyAdminAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
         const body = await request.json();
 
@@ -98,10 +75,6 @@ export async function POST(request: NextRequest) {
  * PUT - Activate a draft config
  */
 export async function PUT(request: NextRequest) {
-    if (!verifyAdminAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
         const body = await request.json();
         const { version } = body;
@@ -133,10 +106,6 @@ export async function PUT(request: NextRequest) {
  * DELETE - Delete a draft config
  */
 export async function DELETE(request: NextRequest) {
-    if (!verifyAdminAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     try {
         const { searchParams } = new URL(request.url);
         const version = searchParams.get('version');

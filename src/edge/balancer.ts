@@ -26,12 +26,14 @@ import {
     captureBackendException,
     shouldSample,
     withSpanAsync,
+    trackAIClassifierPerformance,
 } from '@/sentry/instrumentation';
 import type {
     GlobalConfig,
     RoutePolicy,
     RequestFeatures,
     DecisionAction,
+    BotScoringResult,
 } from '@/config/schema';
 
 /**
@@ -103,32 +105,73 @@ export async function handleRequest(
     const sampleRate = config.telemetrySampleRate;
     const shouldEmitTelemetry = shouldSample(sampleRate);
 
-    // Start Sentry transaction
+    // Log URL for debugging
+    console.log('[Balancer] request URL:', request.url);
+    let pathname = '/unknown';
+    try {
+        pathname = new URL(request.url).pathname;
+    } catch (e) {
+        console.error('[Balancer] Invalid URL:', request.url, e);
+    }
+
+    // Start Sentry transaction with full request journey
     return Sentry.startSpan(
         {
-            name: `edge.balancer ${request.method} ${new URL(request.url).pathname}`,
+            name: `Request Journey: ${request.method} ${pathname}`,
             op: 'http.server',
+            attributes: {
+                'http.method': request.method,
+                'http.url': pathname,
+                'http.route': pathname,
+            },
         },
         async (span) => {
+            // Add initial breadcrumb for request start
+            // Note: requestId will be generated in extractFeatures
+            addDecisionBreadcrumb('request.start', 'Request received', {
+                method: request.method,
+                path: pathname,
+            });
             let features: RequestFeatures;
             let decision: DecisionAction = 'allow';
             let policyVersion = config.version;
             let backendId: string | undefined;
+            let botResult: BotScoringResult | undefined;
 
             try {
-                // 1. Extract features
-                Sentry.addBreadcrumb({ category: 'debug', message: 'Extracting features...' });
+                // 1. Extract features - Step 1 in request journey
+                Sentry.addBreadcrumb({ 
+                    category: 'request.journey', 
+                    message: 'Step 1: Extracting request features',
+                    level: 'info',
+                    data: { step: 1, stage: 'feature_extraction' }
+                });
                 features = await withSpanAsync(
                     SpanOps.FEATURE_EXTRACT,
                     'Extract request features',
                     () => extractFeatures(request, ipSalt)
                 );
+                
+                // Add feature context to span
+                const featureSpan = Sentry.getActiveSpan();
+                if (featureSpan) {
+                    featureSpan.setAttribute('features.ip_hash', features.ipHash);
+                    featureSpan.setAttribute('features.user_agent_length', features.userAgent.length);
+                    featureSpan.setAttribute('features.has_cookies', features.hasCookies);
+                    featureSpan.setAttribute('features.country', features.country || 'unknown');
+                }
+                
                 Sentry.addBreadcrumb({
-                    category: 'debug',
+                    category: 'request.journey',
                     message: 'Features extracted',
+                    level: 'info',
                     data: {
+                        step: 1,
+                        stage: 'feature_extraction_complete',
                         ipHash: features.ipHash.substring(0, 8),
-                        uaLength: features.userAgent.length
+                        uaLength: features.userAgent.length,
+                        hasCookies: features.hasCookies,
+                        country: features.country
                     }
                 });
 
@@ -157,16 +200,22 @@ export async function handleRequest(
 
                 // 3. Check for valid challenge token (skip further checks if valid)
                 const existingToken = extractToken(request);
+                let isValidatedHuman = false;
                 if (existingToken) {
                     const tokenResult = await validateToken(existingToken, features.ipHash, challengeSecret);
                     if (tokenResult.valid) {
                         addDecisionBreadcrumb('challenge', 'Valid challenge token', {});
-                        // Skip bot check for validated humans
+                        isValidatedHuman = true;
                     }
                 }
 
-                // 4. Rate limiting
-                Sentry.addBreadcrumb({ category: 'debug', message: 'Checking rate limit...' });
+                // 4. Rate limiting - Step 2 in request journey
+                Sentry.addBreadcrumb({ 
+                    category: 'request.journey', 
+                    message: 'Step 2: Checking rate limits',
+                    level: 'info',
+                    data: { step: 2, stage: 'rate_limiting', key_type: rateConfig.keyType }
+                });
                 const rateResult = await withSpanAsync(
                     SpanOps.RATE_LIMIT,
                     'Check rate limits',
@@ -174,6 +223,17 @@ export async function handleRequest(
                 );
 
                 setRateLimitContext(rateResult.keyType, rateResult.allowed, rateResult.remaining);
+                
+                // Add rate limit decision to span
+                const rateSpan = Sentry.getActiveSpan();
+                if (rateSpan) {
+                    rateSpan.setAttribute('ratelimit.allowed', rateResult.allowed);
+                    rateSpan.setAttribute('ratelimit.remaining', rateResult.remaining);
+                    rateSpan.setAttribute('ratelimit.key_type', rateResult.keyType);
+                    if (rateResult.retryAfterMs) {
+                        rateSpan.setAttribute('ratelimit.retry_after_ms', rateResult.retryAfterMs);
+                    }
+                }
 
                 if (!rateResult.allowed) {
                     decision = 'throttle';
@@ -189,6 +249,16 @@ export async function handleRequest(
 
                     setStandardTags(decision, features.path, policyVersion);
 
+                    const latency = Date.now() - startTime;
+                    recordMetric({
+                        requestId: features.requestId,
+                        decision,
+                        path: features.path,
+                        method: features.method,
+                        latencyMs: latency,
+                        statusCode: 429,
+                    }, request.url);
+
                     return createThrottleResponse(
                         features.requestId,
                         Math.ceil((rateResult.retryAfterMs ?? 60000) / 1000),
@@ -197,37 +267,96 @@ export async function handleRequest(
                     );
                 }
 
-                // 5. Bot detection
-                Sentry.addBreadcrumb({ category: 'debug', message: 'Evaluating bot score...' });
-                const aiConfig = process.env.AI_CLASSIFIER_URL ? {
-                    url: process.env.AI_CLASSIFIER_URL,
-                    apiKey: process.env.AI_CLASSIFIER_API_KEY || '',
-                    timeoutMs: parseInt(process.env.AI_CLASSIFIER_TIMEOUT_MS || '50', 10),
-                } : undefined;
+                // 5. Bot detection - Step 3 in request journey
+                if (isValidatedHuman) {
+                    Sentry.addBreadcrumb({ 
+                        category: 'request.journey', 
+                        message: 'Step 3: Bot detection (challenge token validated)',
+                        level: 'info',
+                        data: { step: 3, stage: 'bot_detection', bypass: 'challenge_token' }
+                    });
+                    botResult = {
+                        score: 0,
+                        bucket: 'low',
+                        decision: 'allow',
+                        reasons: [{ rule: 'challenge_token', weight: 0, triggered: true, explanation: 'Valid challenge token' }]
+                    };
+                } else {
+                    Sentry.addBreadcrumb({ 
+                        category: 'request.journey', 
+                        message: 'Step 3: Evaluating bot score',
+                        level: 'info',
+                        data: { 
+                            step: 3, 
+                            stage: 'bot_detection',
+                            heuristics_enabled: true,
+                            ai_enabled: botConfig.useAiClassifier 
+                        }
+                    });
+                    const aiConfig = process.env.AI_CLASSIFIER_URL ? {
+                        url: process.env.AI_CLASSIFIER_URL,
+                        apiKey: process.env.AI_CLASSIFIER_API_KEY || '',
+                        timeoutMs: parseInt(process.env.AI_CLASSIFIER_TIMEOUT_MS || '50', 10),
+                    } : undefined;
 
-                const botResult = await withSpanAsync(
-                    SpanOps.BOT_HEURISTICS,
-                    'Evaluate bot score',
-                    () => makeDecision(features, botConfig, {
-                        ipAllowlist: policy?.ipAllowlist,
-                        ipBlocklist: policy?.ipBlocklist,
-                        aiConfig: botConfig.useAiClassifier ? aiConfig : undefined,
-                    })
-                );
+                    botResult = await withSpanAsync(
+                        SpanOps.BOT_HEURISTICS,
+                        'Evaluate bot score (heuristics + AI)',
+                        () => makeDecision(features, botConfig, {
+                            ipAllowlist: policy?.ipAllowlist,
+                            ipBlocklist: policy?.ipBlocklist,
+                            aiConfig: botConfig.useAiClassifier ? aiConfig : undefined,
+                        })
+                    );
+                }
+
                 Sentry.addBreadcrumb({
-                    category: 'debug',
+                    category: 'request.journey',
                     message: 'Bot score calculated',
-                    data: { score: botResult.score }
+                    level: 'info',
+                    data: { 
+                        step: 3, 
+                        stage: 'bot_detection_complete',
+                        score: botResult.score,
+                        bucket: botResult.bucket,
+                        decision: botResult.decision,
+                        ai_used: !!botResult.aiResult,
+                        ai_score: botResult.aiResult?.probability
+                    }
                 });
 
                 setBotContext(botResult);
 
                 if (shouldEmitTelemetry) {
                     recordBotScore(botResult.score, features.path);
+                    
+                    // Track AI classifier performance if AI was used
+                    if (botResult.aiResult) {
+                        // Extract heuristic score from reasons (approximate)
+                        const heuristicScore = botResult.reasons.reduce((sum, r) => sum + (r.triggered ? r.weight : 0), 0) / 100;
+                        trackAIClassifierPerformance(
+                            heuristicScore,
+                            botResult.aiResult.probability,
+                            botResult.score,
+                            botResult.decision,
+                            features.path
+                        );
+                    }
                 }
 
                 // Handle bot decision
                 if (botResult.decision !== 'allow') {
+                    // Get top triggered reason for metrics
+                    const topTriggeredReason = botResult.reasons
+                        .filter(r => r.triggered)
+                        .sort((a, b) => b.weight - a.weight)[0]?.rule;
+                    console.log('!!! BOT DETECTED !!!', {
+                        action: botResult.decision,
+                        score: botResult.score,
+                        reasons: botResult.reasons.filter(r => r.triggered).map(r => r.rule),
+                        bucket: botResult.bucket
+                    });
+
                     decision = botResult.decision;
                     addDecisionBreadcrumb('bot', `Bot decision: ${decision}`, {
                         score: botResult.score,
@@ -242,30 +371,84 @@ export async function handleRequest(
 
                     setStandardTags(decision, features.path, policyVersion, undefined, botResult.bucket);
 
+                    console.log('[Balancer] Executing decision action:', decision);
+                    const latency = Date.now() - startTime;
+                    
                     switch (decision) {
                         case 'block':
+                            console.log('[Balancer] Creating block response');
+                            recordMetric({
+                                requestId: features.requestId,
+                                decision,
+                                path: features.path,
+                                method: features.method,
+                                latencyMs: latency,
+                                botScore: botResult.score,
+                                botBucket: botResult.bucket,
+                                botReason: topTriggeredReason,
+                                statusCode: 403,
+                            }, request.url);
                             return createBlockResponse(features.requestId);
 
                         case 'challenge':
+                            // Use absolute URL for redirect to avoid "Invalid URL" errors in some runtimes
+                            const protocol = features.protocol || 'https';
+                            const host = features.host;
+                            const absoluteChallengeUrl = `${protocol}://${host}${config.challengePageUrl}`;
+
+                            console.log('[Balancer] Creating challenge response. Absolute URL:', absoluteChallengeUrl);
+
+                            recordMetric({
+                                requestId: features.requestId,
+                                decision,
+                                path: features.path,
+                                method: features.method,
+                                latencyMs: latency,
+                                botScore: botResult.score,
+                                botBucket: botResult.bucket,
+                                botReason: topTriggeredReason,
+                                statusCode: 302,
+                            }, request.url);
+
                             return createChallengeResponse(
                                 features.requestId,
-                                config.challengePageUrl,
+                                absoluteChallengeUrl,
                                 features.path
                             );
 
                         case 'throttle':
+                            console.log('[Balancer] Creating throttle response');
+                            recordMetric({
+                                requestId: features.requestId,
+                                decision,
+                                path: features.path,
+                                method: features.method,
+                                latencyMs: latency,
+                                botScore: botResult.score,
+                                botBucket: botResult.bucket,
+                                botReason: topTriggeredReason,
+                                statusCode: 429,
+                            }, request.url);
                             return createThrottleResponse(features.requestId, 30, 0);
 
                         case 'reroute':
+                            console.log('[Balancer] Rerouting request');
                             // Will handle in backend selection
                             break;
                     }
                 }
 
-                // 6. Select backend
+                // 6. Select backend - Step 4 in request journey
                 const selectedBackends = decision === 'reroute' && botConfig.rerouteBackendId
                     ? backends.filter(b => b.id === botConfig.rerouteBackendId)
                     : backends;
+
+                Sentry.addBreadcrumb({ 
+                    category: 'request.journey', 
+                    message: 'Step 4: Selecting backend',
+                    level: 'info',
+                    data: { step: 4, stage: 'route_selection', strategy, candidates: selectedBackends.length }
+                });
 
                 const lbResult = await withSpanAsync(
                     SpanOps.ROUTE_SELECT,
@@ -283,12 +466,27 @@ export async function handleRequest(
                 setLoadBalancerContext(lbResult);
                 backendId = lbResult.backend.id;
 
-                addDecisionBreadcrumb('backend', `Selected backend: ${lbResult.backend.id}`, {
-                    strategy: lbResult.strategy,
-                    candidates: lbResult.candidatesCount,
+                Sentry.addBreadcrumb({
+                    category: 'request.journey',
+                    message: 'Backend selected',
+                    level: 'info',
+                    data: {
+                        step: 4,
+                        stage: 'route_selection_complete',
+                        backend: lbResult.backend.id,
+                        strategy: lbResult.strategy,
+                        candidates: lbResult.candidatesCount,
+                        selection_reason: lbResult.selectionReason
+                    }
                 });
 
-                // 7. Proxy to backend
+                // 7. Proxy to backend - Step 5 in request journey
+                Sentry.addBreadcrumb({ 
+                    category: 'request.journey', 
+                    message: 'Step 5: Proxying request to backend',
+                    level: 'info',
+                    data: { step: 5, stage: 'proxy', backend: lbResult.backend.id }
+                });
                 const proxyStartTime = Date.now();
 
                 const response = await withSpanAsync(
@@ -341,6 +539,26 @@ export async function handleRequest(
                     responseHeaders.set(key, value);
                 }
 
+                // Record metric for successful request
+                const totalLatency = Date.now() - startTime;
+                // Get top triggered reason if bot detection ran
+                const topTriggeredReasonForAllow = botResult?.reasons
+                    .filter(r => r.triggered)
+                    .sort((a, b) => b.weight - a.weight)[0]?.rule;
+                
+                recordMetric({
+                    requestId: features.requestId,
+                    decision,
+                    path: features.path,
+                    method: features.method,
+                    backendId: lbResult.backend.id,
+                    latencyMs: totalLatency,
+                    botScore: botResult?.score,
+                    botBucket: botResult?.bucket,
+                    botReason: topTriggeredReasonForAllow,
+                    statusCode: response.status,
+                }, request.url);
+
                 return new Response(response.body, {
                     status: response.status,
                     statusText: response.statusText,
@@ -370,16 +588,78 @@ export async function handleRequest(
 }
 
 /**
+ * Record request metric asynchronously (fire and forget)
+ */
+function recordMetric(
+    data: {
+        requestId: string;
+        decision: DecisionAction;
+        path?: string;
+        method?: string;
+        backendId?: string;
+        latencyMs: number;
+        botScore?: number;
+        botBucket?: 'low' | 'medium' | 'high';
+        botReason?: string; // Top triggered reason
+        statusCode?: number;
+    },
+    baseUrl?: string
+): void {
+    // Get API key from environment
+    const apiKey = process.env.METRICS_API_KEY;
+    if (!apiKey) {
+        // Silently skip if no API key configured
+        return;
+    }
+
+    // Construct absolute URL for metrics endpoint
+    let metricsUrl = '/internal/api/metrics/record';
+    if (baseUrl) {
+        try {
+            const url = new URL(baseUrl);
+            metricsUrl = `${url.protocol}//${url.host}/internal/api/metrics/record`;
+        } catch {
+            // Fallback to relative URL if parsing fails
+        }
+    }
+
+    // Fire and forget - don't block response
+    fetch(metricsUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            requestId: data.requestId,
+            timestamp: new Date().toISOString(),
+            decision: data.decision,
+            path: data.path,
+            method: data.method,
+            backendId: data.backendId,
+            latencyMs: data.latencyMs,
+            botScore: data.botScore,
+            botBucket: data.botBucket,
+            botReason: data.botReason,
+            statusCode: data.statusCode,
+        }),
+    }).catch((error) => {
+        // Silently fail - metrics recording shouldn't break requests
+        console.error('[Balancer] Failed to record metric:', error);
+    });
+}
+
+/**
  * Check if path should be excluded from load balancer
  */
 export function shouldExcludePath(path: string): boolean {
     const excludedPatterns = [
         /^\/_next\//,           // Next.js internal
-        /^\/api\/health$/,      // Health check
         /^\/favicon\.ico$/,     // Favicon
         /^\/robots\.txt$/,      // Robots
-        /^\/internal/,          // Admin routes
+        /^\/internal/,          // All internal routes (admin, API, cron, health, etc.)
         /^\/challenge/,         // Challenge page
+        /^\/api\/auth/,         // Auth API routes (should not be load balanced)
     ];
 
     return excludedPatterns.some(pattern => pattern.test(path));

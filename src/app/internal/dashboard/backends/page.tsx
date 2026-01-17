@@ -90,27 +90,54 @@ export default function BackendsPage() {
                     <CardTitle>Latency Comparison (P95)</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {backends.map((backend) => (
-                        <div key={backend.backendId} className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <span className="font-medium text-sm">{backend.backendId}</span>
-                                <span className={`text-sm ${(backend.latencyP95 || 0) < 50 ? 'text-green-500' :
-                                    (backend.latencyP95 || 0) < 100 ? 'text-yellow-500' : 'text-red-500'
-                                    }`}>
-                                    {backend.latencyP95 || 0}ms
-                                </span>
-                            </div>
-                            <div className="h-3 bg-muted rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full rounded-full transition-all duration-500 ${(backend.latencyP95 || 0) < 50 ? 'bg-green-500' :
-                                        (backend.latencyP95 || 0) < 100 ? 'bg-yellow-500' :
-                                            'bg-red-500'
-                                        }`}
-                                    style={{ width: `${Math.min(100, (backend.latencyP95 || 0) / 2)}%` }}
-                                />
-                            </div>
+                    {loading ? (
+                        <div className="space-y-4">
+                            {[1, 2].map((i) => (
+                                <div key={i} className="space-y-2">
+                                    <div className="h-4 bg-muted animate-pulse rounded" />
+                                    <div className="h-3 bg-muted animate-pulse rounded-full" />
+                                </div>
+                            ))}
                         </div>
-                    ))}
+                    ) : backends.length > 0 ? (
+                        backends.map((backend) => {
+                            const p95 = backend.latencyP95 || 0;
+                            const maxLatency = Math.max(...backends.map(b => b.latencyP95 || 0), 100);
+                            const percentage = maxLatency > 0 ? (p95 / maxLatency) * 100 : 0;
+
+                            return (
+                                <div key={backend.backendId} className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-medium text-sm">{backend.backendId}</span>
+                                        <span className={`text-sm ${p95 < 50 ? 'text-green-500' :
+                                            p95 < 100 ? 'text-yellow-500' : 'text-red-500'
+                                            }`}>
+                                            {p95 > 0 ? `${Math.round(p95)}ms` : 'N/A'}
+                                        </span>
+                                    </div>
+                                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                                        {p95 > 0 ? (
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-500 ${p95 < 50 ? 'bg-green-500' :
+                                                    p95 < 100 ? 'bg-yellow-500' :
+                                                        'bg-red-500'
+                                                    }`}
+                                                style={{ width: `${Math.min(100, percentage)}%` }}
+                                            />
+                                        ) : (
+                                            <div className="h-full w-full flex items-center justify-center">
+                                                <span className="text-xs text-muted-foreground">No data</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className="text-center text-muted-foreground py-8">
+                            No backends configured or no latency data available yet.
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 

@@ -8,7 +8,9 @@ export async function proxyRequest(
     backend: Backend,
     additionalHeaders: Record<string, string> = {}
 ): Promise<Response> {
+    console.log('[Proxy] request url:', request.url);
     const url = new URL(request.url);
+    console.log('[Proxy] backend url:', backend.url);
     const backendUrl = new URL(backend.url);
 
     // Rewrite URL to backend

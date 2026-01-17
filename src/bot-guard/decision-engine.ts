@@ -1,5 +1,7 @@
 import type { RequestFeatures, BotScoringResult, BotGuardConfig } from '@/config/schema';
 import { evaluateBotScore, checkAllowBlockLists } from './heuristics';
+import * as Sentry from '@sentry/nextjs';
+import { trackAIClassifierPerformance, trackAIClassifierError } from '@/sentry/instrumentation';
 
 /**
  * AI Classifier response type
@@ -35,9 +37,9 @@ async function callAIClassifier(
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${config.apiKey}`,
+                'x-api-key': config.apiKey,
             },
-            body: JSON.stringify({ features: featureSummary }),
+            body: JSON.stringify(featureSummary),
             signal: controller.signal,
         });
 
@@ -46,12 +48,25 @@ async function callAIClassifier(
         }
 
         const data = await response.json();
+        
+        // Python API returns { bot_score: float, is_bot: bool }
+        const botScore = data.bot_score ?? 0;
+        const isBot = data.is_bot ?? false;
+        
         return {
-            probability: data.probability ?? 0,
-            categories: data.categories ?? [],
-            explanation: data.explanation ?? 'AI classification',
+            probability: botScore,
+            categories: isBot ? ['bot'] : ['human'],
+            explanation: `AI classifier score: ${botScore.toFixed(3)}`,
         };
-    } catch {
+    } catch(e) {
+        console.error('[DecisionEngine] AI classifier error:', e);
+        Sentry.captureException(e);
+        // Track the error for performance monitoring
+        const span = Sentry.getActiveSpan();
+        if (span) {
+            span.setAttribute('ai.error', true);
+            span.setAttribute('ai.error_type', e instanceof Error ? e.name : 'unknown');
+        }
         // Timeout or network error - fail silently
         return null;
     } finally {
@@ -60,70 +75,15 @@ async function callAIClassifier(
 }
 
 /**
- * Create a minimal feature summary for AI classifier
- * No PII, just behavioral signals
+ * Create feature summary matching Python API RequestFeatures model
+ * Matches ai-service/main.py: RequestFeatures(url: str, method: str = "GET", user_agent: str = "")
  */
 function createAIFeatureSummary(features: RequestFeatures): Record<string, unknown> {
     return {
+        url: features.path,
         method: features.method,
-        pathLength: features.path.length,
-        pathDepth: features.path.split('/').filter(Boolean).length,
-        hasQueryParams: features.path.includes('?'),
-
-        headerCount: features.headerCount,
-        hasAcceptHeader: features.hasAcceptHeader,
-        hasCookies: features.hasCookies,
-        cookieCount: features.cookieCount,
-
-        userAgentLength: features.userAgent.length,
-        hasAcceptLanguage: !!features.acceptLanguage,
-        hasReferer: !!features.referer,
-        hasOrigin: !!features.origin,
-
-        country: features.country,
-        hour: new Date(features.timestamp).getUTCHours(),
-        dayOfWeek: new Date(features.timestamp).getUTCDay(),
+        user_agent: features.userAgent,
     };
-}
-
-/**
- * Main decision engine entry point
- * Combines heuristics with optional AI classification
- */
-export async function callAiClassifier(features: RequestFeatures, config: BotGuardConfig): Promise<number | undefined> {
-    try {
-        const aiUrl = process.env.AI_CLASSIFIER_URL;
-        if (!aiUrl) return undefined;
-
-        console.log('[DecisionEngine] Calling AI Classifier:', aiUrl);
-
-        const response = await fetch(aiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': process.env.AI_CLASSIFIER_API_KEY || ''
-            },
-            body: JSON.stringify({
-                url: features.path, // Note: This is pathname only, training data used full URI
-                method: features.method,
-                user_agent: features.userAgent
-            }),
-            signal: AbortSignal.timeout(parseInt(process.env.AI_CLASSIFIER_TIMEOUT_MS || '1000'))
-        });
-
-        if (!response.ok) {
-            console.error('[DecisionEngine] AI call failed:', response.status);
-            return undefined;
-        }
-
-        const data = await response.json();
-        // Python API returns { "bot_score": float, "is_bot": bool }
-        return data.bot_score;
-
-    } catch (error) {
-        console.error('[DecisionEngine] AI error:', error);
-        return undefined;
-    }
 }
 
 /**
@@ -166,15 +126,50 @@ export async function makeDecision(
 
     // 2. Run heuristics-based scoring
     const heuristicResult = evaluateBotScore(features, config);
+    console.log('[DecisionEngine] Heuristic result:', {
+        score: heuristicResult.score,
+        triggered: heuristicResult.reasons.filter(r => r.triggered).map(r => r.rule)
+    });
 
     // 3. Optionally enhance with AI classifier
     if (config.useAiClassifier && options.aiConfig) {
-        const featureSummary = createAIFeatureSummary(features);
-        const aiResult = await callAIClassifier(featureSummary, options.aiConfig);
+        console.log('[DecisionEngine] AI classification enabled');
+        
+        // Create a dedicated span for AI classifier call
+        const aiResult = await Sentry.startSpan(
+            {
+                name: 'AI Classifier Inference',
+                op: 'ai.classifier',
+                attributes: {
+                    'ai.model_url': options.aiConfig.url,
+                    'ai.enabled': true,
+                },
+            },
+            async () => {
+                const featureSummary = createAIFeatureSummary(features);
+                return await callAIClassifier(featureSummary, options.aiConfig!);
+            }
+        );
+
+        console.log('[DecisionEngine] AI raw response:', aiResult);
 
         if (aiResult) {
             // Blend AI result with heuristics (AI weighted at 40%)
             const blendedScore = heuristicResult.score * 0.6 + aiResult.probability * 0.4;
+            console.log('[DecisionEngine] Blended score:', blendedScore, '(Heuristic:', heuristicResult.score, 'AI:', aiResult.probability, ')');
+
+            // Track AI classifier performance for monitoring
+            const finalDecision = blendedScore >= config.thresholds.high ? config.actions.high
+                : blendedScore >= config.thresholds.medium ? config.actions.medium
+                    : config.actions.low;
+            
+            trackAIClassifierPerformance(
+                heuristicResult.score,
+                aiResult.probability,
+                blendedScore,
+                finalDecision,
+                features.path
+            );
 
             return {
                 ...heuristicResult,
@@ -182,11 +177,17 @@ export async function makeDecision(
                 bucket: blendedScore >= config.thresholds.high ? 'high'
                     : blendedScore >= config.thresholds.medium ? 'medium'
                         : 'low',
-                decision: blendedScore >= config.thresholds.high ? config.actions.high
-                    : blendedScore >= config.thresholds.medium ? config.actions.medium
-                        : config.actions.low,
+                decision: finalDecision,
                 aiResult,
             };
+        } else {
+            console.log('[DecisionEngine] AI call returned null/failed, using heuristic score');
+            // Track AI classifier failure
+            trackAIClassifierError(
+                new Error('AI classifier returned null or failed'),
+                features,
+                true // fallback to heuristics
+            );
         }
     }
 
