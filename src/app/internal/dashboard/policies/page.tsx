@@ -83,27 +83,20 @@ export default function PoliciesPage() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [apiKey, setApiKey] = useState('');
-
     useEffect(() => {
-        // Initial load (public or cached check)
-        // fetchConfig();
+        // Initial load
+        fetchConfig();
     }, []);
 
-    const fetchConfig = async (key?: string) => {
+    const fetchConfig = async () => {
         setLoading(true);
         setError('');
         try {
-            const headers: Record<string, string> = {};
-            if (key) {
-                headers['Authorization'] = `Bearer ${key}`;
-            }
-
-            const res = await fetch('/internal/api/admin/config', { headers });
+            const res = await fetch('/internal/api/admin/config');
 
             if (!res.ok) {
                 if (res.status === 401) {
-                    throw new Error('Unauthorized: Please provide a valid Admin API Key');
+                    throw new Error('Unauthorized: Please sign in');
                 }
                 throw new Error(`Failed to load config: ${res.statusText}`);
             }
@@ -121,11 +114,6 @@ export default function PoliciesPage() {
     };
 
     const handleSave = async () => {
-        if (!apiKey) {
-            setError('API key is required to save');
-            return;
-        }
-
         setError('');
         setSuccess('');
         setSaving(true);
@@ -140,7 +128,6 @@ export default function PoliciesPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
                 },
                 body: JSON.stringify(toSave),
             });
@@ -223,19 +210,12 @@ export default function PoliciesPage() {
 
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
-                        <Input
-                            type="password"
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="Admin API Key"
-                            className="w-48"
-                        />
                         <Button
-                            onClick={() => fetchConfig(apiKey)}
-                            disabled={loading || !apiKey}
+                            onClick={() => fetchConfig()}
+                            disabled={loading}
                             variant="secondary"
                         >
-                            Load
+                            Reload
                         </Button>
                     </div>
 
@@ -289,12 +269,12 @@ export default function PoliciesPage() {
                             removePolicy={removePolicy}
                             updatePolicy={updatePolicy}
                         />
-                        <SaveSection apiKey={apiKey} setApiKey={setApiKey} saving={saving} handleSave={handleSave} />
+                        <SaveSection saving={saving} handleSave={handleSave} />
                     </TabsContent>
 
                     <TabsContent value="json" className="space-y-4">
                         <JsonTab config={config} setConfig={setConfig} />
-                        <SaveSection apiKey={apiKey} setApiKey={setApiKey} saving={saving} handleSave={handleSave} />
+                        <SaveSection saving={saving} handleSave={handleSave} />
                     </TabsContent>
                 </Tabs>
             )}
@@ -302,18 +282,11 @@ export default function PoliciesPage() {
     );
 }
 
-function SaveSection({ apiKey, setApiKey, saving, handleSave }: any) {
+function SaveSection({ saving, handleSave }: any) {
     return (
         <Card>
             <CardContent className="pt-6 flex items-center gap-4">
-                <Input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter ADMIN_API_KEY to save"
-                    className="flex-1"
-                />
-                <Button onClick={handleSave} disabled={saving || !apiKey}>
+                <Button onClick={handleSave} disabled={saving}>
                     {saving ? 'Saving...' : 'Save Configuration'}
                 </Button>
             </CardContent>

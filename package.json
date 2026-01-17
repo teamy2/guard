@@ -9,13 +9,13 @@
     "lint": "eslint",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
     "load-test": "node scripts/load-test.js",
     "db:init": "npx tsx scripts/init-db.ts"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^2.0.1",
-    "@neondatabase/neon-auth-next": "0.1.0-alpha.24",
-    "@neondatabase/neon-auth-ui": "0.1.0-alpha.2",
+    "@neondatabase/auth": "0.1.0-beta.21",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-select": "^2.2.6",
@@ -45,6 +45,7 @@
     "@types/uuid": "^11.0.0",
     "@vitejs/plugin-react": "^5.1.2",
     "@vitest/coverage-v8": "^4.0.17",
+    "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.3",
     "tailwindcss": "^4",
