@@ -265,10 +265,16 @@ export async function handleRequest(
                             return createBlockResponse(features.requestId);
 
                         case 'challenge':
-                            console.log('[Balancer] Creating challenge response. URL:', config.challengePageUrl);
+                            // Use absolute URL for redirect to avoid "Invalid URL" errors in some runtimes
+                            const protocol = features.protocol || 'https';
+                            const host = features.host;
+                            const absoluteChallengeUrl = `${protocol}://${host}${config.challengePageUrl}`;
+
+                            console.log('[Balancer] Creating challenge response. Absolute URL:', absoluteChallengeUrl);
+
                             return createChallengeResponse(
                                 features.requestId,
-                                config.challengePageUrl,
+                                absoluteChallengeUrl,
                                 features.path
                             );
 
