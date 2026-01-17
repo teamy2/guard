@@ -21,23 +21,52 @@ interface BackendStatus {
 }
 
 export default function DashboardPage() {
-    const [stats] = useState<DashboardStats>({
-        totalRequests: 125432,
-        allowedRequests: 124000,
-        blockedRequests: 1200,
-        challengedRequests: 232,
-        avgLatency: 45,
-        healthyBackends: 2,
-        totalBackends: 2,
+    const [stats, setStats] = useState<DashboardStats>({
+        totalRequests: 0,
+        allowedRequests: 0,
+        blockedRequests: 0,
+        challengedRequests: 0,
+        avgLatency: 0,
+        healthyBackends: 0,
+        totalBackends: 0,
     });
 
     const [backends, setBackends] = useState<BackendStatus[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // Fetch dashboard stats
+        fetch('/api/metrics/stats?hours=1')
+            .then(res => res.json())
+            .then(data => {
+                setStats({
+                    totalRequests: data.totalRequests || 0,
+                    allowedRequests: data.allowedRequests || 0,
+                    blockedRequests: data.blockedRequests || 0,
+                    challengedRequests: data.challengedRequests || 0,
+                    avgLatency: data.avgLatency || 0,
+                    healthyBackends: 0, // Will be set from backends
+                    totalBackends: 0, // Will be set from backends
+                });
+                setLoading(false);
+            })
+            .catch((error) => {
+                console.error('Failed to fetch stats:', error);
+                setLoading(false);
+            });
+
         // Fetch backend health
         fetch('/internal/api/admin/backends')
             .then(res => res.json())
-            .then(data => setBackends(data.backends || []))
+            .then(data => {
+                const backendList = data.backends || [];
+                setBackends(backendList);
+                setStats(prev => ({
+                    ...prev,
+                    healthyBackends: backendList.filter((b: BackendStatus) => b.healthy).length,
+                    totalBackends: backendList.length,
+                }));
+            })
             .catch(() => { });
     }, []);
 
@@ -53,31 +82,31 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     label="Total Requests"
-                    value={formatNumber(stats.totalRequests)}
-                    trend="+12.5%"
+                    value={loading ? '...' : formatNumber(stats.totalRequests)}
+                    trend=""
                     trendUp={true}
                     icon="📊"
                 />
                 <StatCard
                     label="Blocked"
-                    value={formatNumber(stats.blockedRequests)}
-                    trend="-5.2%"
+                    value={loading ? '...' : formatNumber(stats.blockedRequests)}
+                    trend=""
                     trendUp={false}
                     icon="🛡️"
                     color="red"
                 />
                 <StatCard
                     label="Challenged"
-                    value={formatNumber(stats.challengedRequests)}
-                    trend="+2.1%"
+                    value={loading ? '...' : formatNumber(stats.challengedRequests)}
+                    trend=""
                     trendUp={true}
                     icon="🔐"
                     color="yellow"
                 />
                 <StatCard
                     label="Avg Latency"
-                    value={`${stats.avgLatency}ms`}
-                    trend="-8ms"
+                    value={loading ? '...' : `${stats.avgLatency}ms`}
+                    trend=""
                     trendUp={false}
                     icon="⚡"
                     color="green"
@@ -132,18 +161,58 @@ export default function DashboardPage() {
                     <CardTitle>Decision Distribution</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="flex items-center gap-2 h-8 rounded-lg overflow-hidden">
-                        <DecisionBar label="Allow" percentage={96.5} color="bg-green-500" />
-                        <DecisionBar label="Block" percentage={2.5} color="bg-red-500" />
-                        <DecisionBar label="Challenge" percentage={0.8} color="bg-yellow-500" />
-                        <DecisionBar label="Throttle" percentage={0.2} color="bg-orange-500" />
-                    </div>
-                    <div className="flex flex-wrap gap-4 mt-4">
-                        <Legend color="bg-green-500" label="Allow (96.5%)" />
-                        <Legend color="bg-red-500" label="Block (2.5%)" />
-                        <Legend color="bg-yellow-500" label="Challenge (0.8%)" />
-                        <Legend color="bg-orange-500" label="Throttle (0.2%)" />
-                    </div>
+                    {loading ? (
+                        <div className="flex items-center justify-center h-32">
+                            <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
+                        </div>
+                    ) : stats.totalRequests > 0 ? (
+                        <>
+                            <div className="flex items-center gap-2 h-8 rounded-lg overflow-hidden">
+                                <DecisionBar 
+                                    label="Allow" 
+                                    percentage={(stats.allowedRequests / stats.totalRequests) * 100} 
+                                    color="bg-green-500" 
+                                />
+                                <DecisionBar 
+                                    label="Block" 
+                                    percentage={(stats.blockedRequests / stats.totalRequests) * 100} 
+                                    color="bg-red-500" 
+                                />
+                                <DecisionBar 
+                                    label="Challenge" 
+                                    percentage={(stats.challengedRequests / stats.totalRequests) * 100} 
+                                    color="bg-yellow-500" 
+                                />
+                                <DecisionBar 
+                                    label="Throttle" 
+                                    percentage={((stats.totalRequests - stats.allowedRequests - stats.blockedRequests - stats.challengedRequests) / stats.totalRequests) * 100} 
+                                    color="bg-orange-500" 
+                                />
+                            </div>
+                            <div className="flex flex-wrap gap-4 mt-4">
+                                <Legend 
+                                    color="bg-green-500" 
+                                    label={`Allow (${((stats.allowedRequests / stats.totalRequests) * 100).toFixed(1)}%)`} 
+                                />
+                                <Legend 
+                                    color="bg-red-500" 
+                                    label={`Block (${((stats.blockedRequests / stats.totalRequests) * 100).toFixed(1)}%)`} 
+                                />
+                                <Legend 
+                                    color="bg-yellow-500" 
+                                    label={`Challenge (${((stats.challengedRequests / stats.totalRequests) * 100).toFixed(1)}%)`} 
+                                />
+                                <Legend 
+                                    color="bg-orange-500" 
+                                    label={`Throttle (${(((stats.totalRequests - stats.allowedRequests - stats.blockedRequests - stats.challengedRequests) / stats.totalRequests) * 100).toFixed(1)}%)`} 
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center text-muted-foreground py-8">
+                            No data available yet. Metrics will appear as requests are processed.
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
@@ -196,9 +265,11 @@ function StatCard({
                     </div>
                     <span className="text-2xl">{icon}</span>
                 </div>
-                <div className={`text-sm mt-2 ${trendUp ? 'text-green-500' : 'text-red-500'}`}>
-                    {trend} vs last hour
-                </div>
+                {trend && (
+                    <div className={`text-sm mt-2 ${trendUp ? 'text-green-500' : 'text-red-500'}`}>
+                        {trend} vs last hour
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

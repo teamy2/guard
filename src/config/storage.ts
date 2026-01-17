@@ -194,6 +194,187 @@ export async function getBackendHealth(backendId: string): Promise<BackendHealth
 }
 
 // ===========================================
+// REQUEST METRICS STORAGE
+// ===========================================
+
+export interface RequestMetric {
+  requestId: string;
+  timestamp?: Date;
+  decision: 'allow' | 'block' | 'challenge' | 'throttle' | 'reroute';
+  path?: string;
+  method?: string;
+  backendId?: string;
+  latencyMs?: number;
+  botScore?: number;
+  botBucket?: 'low' | 'medium' | 'high';
+  statusCode?: number;
+}
+
+/**
+ * Record a request metric
+ */
+export async function recordRequestMetric(metric: RequestMetric): Promise<void> {
+  try {
+    await sql`
+      INSERT INTO request_metrics (
+        request_id,
+        timestamp,
+        decision,
+        path,
+        method,
+        backend_id,
+        latency_ms,
+        bot_score,
+        bot_bucket,
+        status_code
+      )
+      VALUES (
+        ${metric.requestId},
+        ${metric.timestamp || new Date()},
+        ${metric.decision},
+        ${metric.path || null},
+        ${metric.method || null},
+        ${metric.backendId || null},
+        ${metric.latencyMs || null},
+        ${metric.botScore || null},
+        ${metric.botBucket || null},
+        ${metric.statusCode || null}
+      )
+    `;
+  } catch (error) {
+    // Don't fail the request if metrics recording fails
+    console.error('[Metrics] Failed to record metric:', error);
+  }
+}
+
+/**
+ * Get aggregated stats for dashboard
+ * Returns stats for the last hour by default
+ */
+export async function getDashboardStats(hours: number = 1): Promise<{
+  totalRequests: number;
+  allowedRequests: number;
+  blockedRequests: number;
+  challengedRequests: number;
+  throttledRequests: number;
+  avgLatency: number;
+  decisionDistribution: Record<string, number>;
+}> {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+  // Get total counts by decision
+  const decisionCounts = await sql`
+    SELECT 
+      decision,
+      COUNT(*) as count,
+      AVG(latency_ms) as avg_latency
+    FROM request_metrics
+    WHERE timestamp >= ${since}
+    GROUP BY decision
+  `;
+
+  // Get overall stats
+  const overall = await sql`
+    SELECT 
+      COUNT(*) as total,
+      AVG(latency_ms) as avg_latency
+    FROM request_metrics
+    WHERE timestamp >= ${since}
+  `;
+
+  const total = overall.rows[0]?.total || 0;
+  const avgLatency = overall.rows[0]?.avg_latency || 0;
+
+  const decisionMap: Record<string, number> = {};
+  let allowed = 0;
+  let blocked = 0;
+  let challenged = 0;
+  let throttled = 0;
+
+  for (const row of decisionCounts.rows) {
+    const count = parseInt(row.count as string, 10);
+    decisionMap[row.decision as string] = count;
+
+    switch (row.decision) {
+      case 'allow':
+        allowed = count;
+        break;
+      case 'block':
+        blocked = count;
+        break;
+      case 'challenge':
+        challenged = count;
+        break;
+      case 'throttle':
+        throttled = count;
+        break;
+    }
+  }
+
+  return {
+    totalRequests: parseInt(total as string, 10),
+    allowedRequests: allowed,
+    blockedRequests: blocked,
+    challengedRequests: challenged,
+    throttledRequests: throttled,
+    avgLatency: Math.round(parseFloat(avgLatency as string) || 0),
+    decisionDistribution: decisionMap,
+  };
+}
+
+/**
+ * Get bot detection stats
+ */
+export async function getBotStats(hours: number = 1): Promise<{
+  scoreBuckets: { bucket: string; count: number; percentage: number }[];
+  topReasons: { rule: string; count: number; percentage: number }[];
+  actions: Record<string, number>;
+}> {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+  // Get counts by bot bucket
+  const bucketCounts = await sql`
+    SELECT 
+      bot_bucket,
+      COUNT(*) as count
+    FROM request_metrics
+    WHERE timestamp >= ${since} AND bot_bucket IS NOT NULL
+    GROUP BY bot_bucket
+  `;
+
+  const total = bucketCounts.rows.reduce((sum, row) => sum + parseInt(row.count as string, 10), 0);
+
+  const scoreBuckets = bucketCounts.rows.map(row => ({
+    bucket: row.bot_bucket as string,
+    count: parseInt(row.count as string, 10),
+    percentage: total > 0 ? (parseInt(row.count as string, 10) / total) * 100 : 0,
+  }));
+
+  // Get action counts
+  const actionCounts = await sql`
+    SELECT 
+      decision,
+      COUNT(*) as count
+    FROM request_metrics
+    WHERE timestamp >= ${since} AND decision IN ('block', 'challenge', 'throttle')
+    GROUP BY decision
+  `;
+
+  const actions: Record<string, number> = {};
+  for (const row of actionCounts.rows) {
+    actions[row.decision as string] = parseInt(row.count as string, 10);
+  }
+
+  // For top reasons, we'd need to store that separately or parse from other data
+  // For now, return empty array
+  return {
+    scoreBuckets,
+    topReasons: [],
+    actions,
+  };
+}
+
+// ===========================================
 // DATABASE INITIALIZATION
 // ===========================================
 
@@ -230,6 +411,35 @@ export async function initializeDatabase(): Promise<void> {
   // Create index on status for faster lookups
   await sql`
     CREATE INDEX IF NOT EXISTS idx_lb_configs_status ON lb_configs(status)
+  `;
+
+  // Create request metrics table
+  await sql`
+    CREATE TABLE IF NOT EXISTS request_metrics (
+      id BIGSERIAL PRIMARY KEY,
+      request_id VARCHAR(100) NOT NULL,
+      timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      decision VARCHAR(20) NOT NULL,
+      path VARCHAR(500),
+      method VARCHAR(10),
+      backend_id VARCHAR(100),
+      latency_ms INTEGER,
+      bot_score REAL,
+      bot_bucket VARCHAR(20),
+      status_code INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+  `;
+
+  // Create indexes for faster queries
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_request_metrics_timestamp ON request_metrics(timestamp DESC)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_request_metrics_decision ON request_metrics(decision)
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_request_metrics_backend ON request_metrics(backend_id)
   `;
 
   console.log('[DB] Database initialized');
