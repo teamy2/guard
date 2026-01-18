@@ -57,6 +57,8 @@ function verifyMetricsAuth(request: NextRequest): boolean {
 }
 
 export async function proxy(request: NextRequest) {
+    Sentry.logger.info('Proxy request received', { url: request.url, host: request.headers.get('host') });
+
     const path = new URL(request.url).pathname;
 
     if (request.headers.get('host') !== 'uottahack8.vercel.app') {
