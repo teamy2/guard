@@ -2126,19 +2126,19 @@ packages:
   '@selderee/plugin-htmlparser2@0.11.0':
     resolution: {integrity: sha512-P33hHGdldxGabLFjPPpaTxVolMrzrcegejx+0GxjrIb9Zv48D8yAIA/QTDR2dFl7Uz7urX8aX6+5bCZslr+gWQ==}
 
-  '@sentry-browser-utils@10.34.0':
+  '@sentry-internal/browser-utils@10.34.0':
     resolution: {integrity: sha512-0YNr60rGHyedmwkO0lbDBjNx2KAmT3kWamjaqu7Aw+jsESoPLgt+fzaTVvUBvkftBDui2PeTSzXm/nqzssctYg==}
     engines: {node: '>=18'}
 
-  '@sentry-feedback@10.34.0':
+  '@sentry-internal/feedback@10.34.0':
     resolution: {integrity: sha512-wgGnq+iNxsFSOe9WX/FOvtoItSTjgLJJ4dQkVYtcVM6WGBVIg4wgNYfECCnRNztUTPzpZHLjC9r+4Pym451DDQ==}
     engines: {node: '>=18'}
 
-  '@sentry-replay-canvas@10.34.0':
+  '@sentry-internal/replay-canvas@10.34.0':
     resolution: {integrity: sha512-XWH/9njtgMD+LLWjc4KKgBpb+dTCkoUEIFDxcvzG/87d+jirmzf0+r8EfpLwKG+GrqNiiGRV39zIqu0SfPl+cw==}
     engines: {node: '>=18'}
 
-  '@sentry-replay@10.34.0':
+  '@sentry-internal/replay@10.34.0':
     resolution: {integrity: sha512-Vmea0GcOg57z/S1bVSj3saFcRvDqdLzdy4wd9fQMpMgy5OCbTlo7lxVUndKzbcZnanma6zF6VxwnWER1WuN9RA==}
     engines: {node: '>=18'}
 
@@ -7613,32 +7613,32 @@ snapshots:
       domhandler: 5.0.3
       selderee: 0.11.0
 
-  '@sentry-browser-utils@10.34.0':
+  '@sentry-internal/browser-utils@10.34.0':
     dependencies:
       '@sentry/core': 10.34.0
 
-  '@sentry-feedback@10.34.0':
+  '@sentry-internal/feedback@10.34.0':
     dependencies:
       '@sentry/core': 10.34.0
 
-  '@sentry-replay-canvas@10.34.0':
+  '@sentry-internal/replay-canvas@10.34.0':
     dependencies:
-      '@sentry-replay': 10.34.0
+      '@sentry-internal/replay': 10.34.0
       '@sentry/core': 10.34.0
 
-  '@sentry-replay@10.34.0':
+  '@sentry-internal/replay@10.34.0':
     dependencies:
-      '@sentry-browser-utils': 10.34.0
+      '@sentry-internal/browser-utils': 10.34.0
       '@sentry/core': 10.34.0
 
   '@sentry/babel-plugin-component-annotate@4.6.2': {}
 
   '@sentry/browser@10.34.0':
     dependencies:
-      '@sentry-browser-utils': 10.34.0
-      '@sentry-feedback': 10.34.0
-      '@sentry-replay': 10.34.0
-      '@sentry-replay-canvas': 10.34.0
+      '@sentry-internal/browser-utils': 10.34.0
+      '@sentry-internal/feedback': 10.34.0
+      '@sentry-internal/replay': 10.34.0
+      '@sentry-internal/replay-canvas': 10.34.0
       '@sentry/core': 10.34.0
 
   '@sentry/bundler-plugin-core@4.6.2':
@@ -7706,7 +7706,7 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/semantic-conventions': 1.39.0
       '@rollup/plugin-commonjs': 28.0.1(rollup@4.55.1)
-      '@sentry-browser-utils': 10.34.0
+      '@sentry-internal/browser-utils': 10.34.0
       '@sentry/bundler-plugin-core': 4.6.2
       '@sentry/core': 10.34.0
       '@sentry/node': 10.34.0
