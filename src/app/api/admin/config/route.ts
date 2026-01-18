@@ -12,6 +12,7 @@ import {
 import { invalidateConfigCache } from '@/config/loader';
 import { GlobalConfigSchema } from '@/config/schema';
 import * as Sentry from '@sentry/nextjs';
+import { addDomainToVercel } from '@/lib/vercel';
 
 /**
  * Get current user ID from request
@@ -124,6 +125,14 @@ export async function POST(request: NextRequest) {
             if (!owns) {
                 // Auto-assign ownership on first config creation
                 await assignDomainToUser(domain, userId);
+                
+                // Add domain to Vercel project (non-blocking)
+                // This will log warnings if Vercel API is not configured, but won't fail config creation
+                await addDomainToVercel({
+                    domain,
+                    projectId: process.env.VERCEL_PROJECT_ID,
+                    teamId: process.env.VERCEL_TEAM_ID,
+                });
             }
         }
 

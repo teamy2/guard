@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserDomains, assignDomainToUser } from '@/config/storage';
 import * as Sentry from '@sentry/nextjs';
 import { getCurrentUserId } from '@/lib/auth/server';
+import { addDomainToVercel } from '@/lib/vercel';
 
 /**
  * GET - List all domains owned by the current user
@@ -61,9 +62,19 @@ export async function POST(request: NextRequest) {
 
         await assignDomainToUser(domain, userId);
 
+        // Add domain to Vercel project (non-blocking)
+        // This will log warnings if Vercel API is not configured, but won't fail domain creation
+        const vercelResult = await addDomainToVercel({
+            domain,
+            projectId: process.env.VERCEL_PROJECT_ID,
+            teamId: process.env.VERCEL_TEAM_ID,
+        });
+
         return NextResponse.json({
             success: true,
-            domain
+            domain,
+            vercelAdded: vercelResult !== null,
+            vercelVerified: vercelResult?.verified ?? false,
         });
     } catch (error) {
         Sentry.captureException(error);
