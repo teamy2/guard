@@ -5,6 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface DashboardStats {
     totalRequests: number;
@@ -32,6 +36,12 @@ interface TrafficDataPoint {
 }
 
 export default function DashboardPage() {
+    const [selectedDomain, setSelectedDomain] = useState<string>('');
+    const [domains, setDomains] = useState<string[]>([]);
+    const [showCreateDomain, setShowCreateDomain] = useState(false);
+    const [newDomain, setNewDomain] = useState('');
+    const [creatingDomain, setCreatingDomain] = useState(false);
+
     const [stats, setStats] = useState<DashboardStats>({
         totalRequests: 0,
         allowedRequests: 0,
@@ -47,9 +57,50 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [trafficLoading, setTrafficLoading] = useState(true);
 
+    // Fetch user domains on mount
     useEffect(() => {
+        fetch('/internal/api/admin/domains')
+            .then(res => res.json())
+            .then(data => {
+                const userDomains = data.domains || [];
+                setDomains(userDomains);
+                // Auto-select first domain if available
+                if (userDomains.length > 0 && !selectedDomain) {
+                    setSelectedDomain(userDomains[0]);
+                }
+            })
+            .catch(() => {
+                setDomains([]);
+            });
+    }, []);
+
+    // Fetch data when domain changes
+    useEffect(() => {
+        if (!selectedDomain) {
+            // No domain selected, show empty state
+            setStats({
+                totalRequests: 0,
+                allowedRequests: 0,
+                blockedRequests: 0,
+                challengedRequests: 0,
+                avgLatency: 0,
+                healthyBackends: 0,
+                totalBackends: 0,
+            });
+            setTrafficData([]);
+            setBackends([]);
+            setLoading(false);
+            setTrafficLoading(false);
+            return;
+        }
+
+        setLoading(true);
+        setTrafficLoading(true);
+
+        const domainParam = `&domain=${encodeURIComponent(selectedDomain)}`;
+        
         // Fetch dashboard stats
-        fetch('/internal/api/metrics/stats?hours=1')
+        fetch(`/internal/api/metrics/stats?hours=1${domainParam}`)
             .then(res => res.json())
             .then(data => {
                 setStats({
@@ -68,7 +119,7 @@ export default function DashboardPage() {
                 setLoading(false);
             });
 
-        // Fetch backend health
+        // Fetch backend health (global, but filtered by domain's config)
         fetch('/internal/api/admin/backends')
             .then(res => res.json())
             .then(data => {
@@ -83,7 +134,7 @@ export default function DashboardPage() {
             .catch(() => { });
 
         // Fetch traffic data
-        fetch('/internal/api/metrics/traffic')
+        fetch(`/internal/api/metrics/traffic?${domainParam.replace('&', '')}`)
             .then(res => res.json())
             .then(data => {
                 setTrafficData(data.data || []);
@@ -93,7 +144,36 @@ export default function DashboardPage() {
                 console.error('Failed to fetch traffic data:', error);
                 setTrafficLoading(false);
             });
-    }, []);
+    }, [selectedDomain]);
+
+    const handleCreateDomain = async () => {
+        if (!newDomain.trim()) return;
+        
+        setCreatingDomain(true);
+        try {
+            const res = await fetch('/internal/api/admin/domains', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain: newDomain.trim() }),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setDomains(prev => [...prev, data.domain]);
+                setSelectedDomain(data.domain);
+                setNewDomain('');
+                setShowCreateDomain(false);
+            } else {
+                const error = await res.json();
+                alert(error.error || 'Failed to create domain');
+            }
+        } catch (error) {
+            console.error('Failed to create domain:', error);
+            alert('Failed to create domain');
+        } finally {
+            setCreatingDomain(false);
+        }
+    };
 
     const chartConfig: ChartConfig = {
         total: {
@@ -131,10 +211,76 @@ export default function DashboardPage() {
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-                <p className="text-muted-foreground mt-1">Real-time load balancer metrics and insights</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+                    <p className="text-muted-foreground mt-1">Real-time load balancer metrics and insights</p>
+                </div>
+                
+                {/* Domain Selector */}
+                <div className="flex items-center gap-2">
+                    <Label htmlFor="domain-select" className="text-sm">Domain:</Label>
+                    <Select value={selectedDomain} onValueChange={setSelectedDomain} disabled={domains.length === 0}>
+                        <SelectTrigger id="domain-select" className="w-[200px]">
+                            <SelectValue placeholder={domains.length === 0 ? "No domains" : "Select domain"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {domains.length === 0 ? (
+                                <SelectItem value="" disabled>No domains available</SelectItem>
+                            ) : (
+                                domains.map(domain => (
+                                    <SelectItem key={domain} value={domain}>
+                                        {domain}
+                                    </SelectItem>
+                                ))
+                            )}
+                        </SelectContent>
+                    </Select>
+                    <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowCreateDomain(!showCreateDomain)}
+                    >
+                        {showCreateDomain ? 'Cancel' : '+ New Domain'}
+                    </Button>
+                </div>
             </div>
+
+            {/* Create Domain Form */}
+            {showCreateDomain && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Create New Domain</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-end gap-2">
+                            <div className="flex-1">
+                                <Label htmlFor="new-domain">Domain Name</Label>
+                                <Input
+                                    id="new-domain"
+                                    placeholder="api.example.com"
+                                    value={newDomain}
+                                    onChange={(e) => setNewDomain(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleCreateDomain();
+                                        }
+                                    }}
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    After creating, point your domain's CNAME to this load balancer
+                                </p>
+                            </div>
+                            <Button 
+                                onClick={handleCreateDomain}
+                                disabled={!newDomain.trim() || creatingDomain}
+                            >
+                                {creatingDomain ? 'Creating...' : 'Create'}
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

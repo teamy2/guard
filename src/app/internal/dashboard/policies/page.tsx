@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 const STRATEGIES: LoadBalancerStrategy[] = [
     'weighted-round-robin',
@@ -78,25 +79,55 @@ function createDefaultPolicy(backendIds: string[]): RoutePolicy {
 }
 
 export default function PoliciesPage() {
+    const [selectedDomain, setSelectedDomain] = useState<string>('');
+    const [domains, setDomains] = useState<string[]>([]);
     const [config, setConfig] = useState<GlobalConfig>(createDefaultConfig());
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+
+    // Fetch user domains on mount
     useEffect(() => {
-        // Initial load
-        fetchConfig();
+        fetch('/internal/api/admin/domains')
+            .then(res => res.json())
+            .then(data => {
+                const userDomains = data.domains || [];
+                setDomains(userDomains);
+                // Auto-select first domain if available
+                if (userDomains.length > 0 && !selectedDomain) {
+                    setSelectedDomain(userDomains[0]);
+                }
+            })
+            .catch(() => {
+                setDomains([]);
+            });
     }, []);
 
+    // Fetch config when domain changes
+    useEffect(() => {
+        if (selectedDomain) {
+            fetchConfig();
+        }
+    }, [selectedDomain]);
+
     const fetchConfig = async () => {
+        if (!selectedDomain) {
+            return;
+        }
+
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('/internal/api/admin/config');
+            const domainParam = `?domain=${encodeURIComponent(selectedDomain)}`;
+            const res = await fetch(`/internal/api/admin/config${domainParam}`);
 
             if (!res.ok) {
                 if (res.status === 401) {
                     throw new Error('Unauthorized: Please sign in');
+                }
+                if (res.status === 403) {
+                    throw new Error('You do not have access to this domain');
                 }
                 throw new Error(`Failed to load config: ${res.statusText}`);
             }
@@ -105,6 +136,11 @@ export default function PoliciesPage() {
             if (data.config) {
                 setConfig(data.config);
                 setSuccess('Configuration loaded successfully');
+            } else {
+                // If no config exists, create a default one for this domain
+                const defaultConfig = createDefaultConfig();
+                defaultConfig.domain = selectedDomain;
+                setConfig(defaultConfig);
             }
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to load config');
@@ -119,8 +155,15 @@ export default function PoliciesPage() {
         setSaving(true);
 
         try {
-            const toSave = {
+            if (!selectedDomain) {
+            setError('Please select a domain');
+            setSaving(false);
+            return;
+        }
+
+        const toSave = {
                 ...config,
+                domain: selectedDomain,
                 updatedAt: new Date().toISOString(),
             };
 
@@ -241,6 +284,35 @@ export default function PoliciesPage() {
                     <AlertDescription>{success}</AlertDescription>
                 </Alert>
             )}
+
+            {/* Domain Selector */}
+            <div className="flex items-center gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                    <Label htmlFor="domain-select" className="text-sm font-medium">Domain:</Label>
+                    <Select value={selectedDomain} onValueChange={setSelectedDomain}>
+                        <SelectTrigger id="domain-select" className="w-[250px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {domains.length === 0 ? (
+                                <SelectItem value="" disabled>No domains available</SelectItem>
+                            ) : (
+                                domains.map(domain => (
+                                    <SelectItem key={domain} value={domain}>
+                                        {domain}
+                                    </SelectItem>
+                                ))
+                            )}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                    {selectedDomain 
+                        ? `Configuring settings for ${selectedDomain}`
+                        : 'Please select a domain to configure'
+                    }
+                </p>
+            </div>
 
             {loading ? (
                 <div className="flex items-center justify-center h-64">
@@ -387,6 +459,16 @@ function BuilderTab({
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <InputWrapper label="Domain">
+                            <Input
+                                value={config.domain || selectedDomain || 'Not set'}
+                                disabled
+                                className="bg-muted"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Set via domain selector above
+                            </p>
+                        </InputWrapper>
                         <InputWrapper label="Version">
                             <Input
                                 value={config.version}

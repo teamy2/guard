@@ -97,11 +97,15 @@ export async function activateConfig(version: string, domain: string = 'default'
  * Get all config versions for a domain
  */
 export async function listConfigs(domain?: string): Promise<Array<{ version: string; status: string; updatedAt: string; domain: string }>> {
-  const domainParam = domain || null;
+  // Require domain - no global queries
+  if (!domain) {
+    return [];
+  }
+
   const result = await sql`
     SELECT version, status, updated_at as "updatedAt", domain
     FROM lb_configs
-    WHERE (${domainParam}::text IS NULL OR domain = ${domainParam})
+    WHERE domain = ${domain}
     ORDER BY updated_at DESC
     LIMIT 50
     `;
@@ -281,7 +285,19 @@ export async function getDashboardStats(hours: number = 1, domain?: string): Pro
   decisionDistribution: Record<string, number>;
 }> {
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  const domainParam = domain || null;
+  
+  // Require domain - no global queries
+  if (!domain) {
+    return {
+      totalRequests: 0,
+      allowedRequests: 0,
+      blockedRequests: 0,
+      challengedRequests: 0,
+      throttledRequests: 0,
+      avgLatency: 0,
+      decisionDistribution: {},
+    };
+  }
 
   // Get total counts by decision
   const decisionCounts = await sql`
@@ -291,7 +307,7 @@ export async function getDashboardStats(hours: number = 1, domain?: string): Pro
     AVG(latency_ms) as avg_latency
     FROM request_metrics
     WHERE timestamp >= ${since} 
-    AND (${domainParam}::text IS NULL OR domain = ${domainParam})
+    AND domain = ${domain}
     GROUP BY decision
     `;
 
@@ -302,7 +318,7 @@ export async function getDashboardStats(hours: number = 1, domain?: string): Pro
     AVG(latency_ms) as avg_latency
     FROM request_metrics
     WHERE timestamp >= ${since}
-    AND (${domainParam}::text IS NULL OR domain = ${domainParam})
+    AND domain = ${domain}
   `;
 
   const total = overall.rows[0]?.total || 0;
@@ -354,7 +370,15 @@ export async function getBotStats(hours: number = 1, domain?: string): Promise<{
   actions: Record<string, number>;
 }> {
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  const domainParam = domain || null;
+  
+  // Require domain - no global queries
+  if (!domain) {
+    return {
+      scoreBuckets: [],
+      topReasons: [],
+      actions: {},
+    };
+  }
 
   // Get counts by bot bucket
   const bucketCounts = await sql`
@@ -364,7 +388,7 @@ export async function getBotStats(hours: number = 1, domain?: string): Promise<{
     FROM request_metrics
     WHERE timestamp >= ${since} 
     AND bot_bucket IS NOT NULL
-    AND (${domainParam}::text IS NULL OR domain = ${domainParam})
+    AND domain = ${domain}
     GROUP BY bot_bucket
     `;
 
@@ -384,7 +408,7 @@ export async function getBotStats(hours: number = 1, domain?: string): Promise<{
     FROM request_metrics
     WHERE timestamp >= ${since} 
     AND decision IN('block', 'challenge', 'throttle', 'allow')
-    AND (${domainParam}::text IS NULL OR domain = ${domainParam})
+    AND domain = ${domain}
     GROUP BY decision
     `;
 
@@ -402,7 +426,7 @@ export async function getBotStats(hours: number = 1, domain?: string): Promise<{
     WHERE timestamp >= ${since} 
       AND bot_reason IS NOT NULL
       AND bot_reason != ''
-      AND (${domainParam}::text IS NULL OR domain = ${domainParam})
+      AND domain = ${domain}
     GROUP BY bot_reason
     ORDER BY count DESC
     LIMIT 10
@@ -439,7 +463,10 @@ export async function getRecentRequests(limit: number = 50, domain?: string): Pr
   botReason: string | null;
   statusCode: number | null;
 }>> {
-  const domainParam = domain || null;
+  // Require domain - no global queries
+  if (!domain) {
+    return [];
+  }
 
   const result = await sql`
   SELECT
@@ -455,7 +482,7 @@ export async function getRecentRequests(limit: number = 50, domain?: string): Pr
     bot_reason,
     status_code
     FROM request_metrics
-    WHERE (${domainParam}::text IS NULL OR domain = ${domainParam})
+    WHERE domain = ${domain}
     ORDER BY timestamp DESC
     LIMIT ${limit}
   `;
@@ -487,9 +514,13 @@ export async function getTimeBucketedRequests(domain?: string): Promise<Array<{
   challenge: number;
   throttle: number;
 }>> {
+  // Require domain - no global queries
+  if (!domain) {
+    return [];
+  }
+
   // Get data from the last 24 hours
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const domainParam = domain || null;
 
   // Query to bucket by 30-minute intervals
   const result = await sql`
@@ -503,7 +534,7 @@ export async function getTimeBucketedRequests(domain?: string): Promise<Array<{
             COUNT(*) FILTER(WHERE decision = 'throttle') as throttle_count
     FROM request_metrics
     WHERE timestamp >= ${since}
-    AND (${domainParam}::text IS NULL OR domain = ${domainParam})
+    AND domain = ${domain}
     GROUP BY bucket_time
     ORDER BY bucket_time ASC
     `;
@@ -543,11 +574,6 @@ export async function initializeDatabase(): Promise<void> {
   // Add domain column if it doesn't exist (migration)
   try {
     await sql`ALTER TABLE lb_configs ADD COLUMN IF NOT EXISTS domain VARCHAR(255) NOT NULL DEFAULT 'default'`;
-    // Drop old constraint if exists (this might fail if constraint name differs, so careful)
-    // For simplicity in this dev environment, we assume we can add the unique constraint. 
-    // In production, we'd check constraint existence.
-    await sql`ALTER TABLE lb_configs DROP CONSTRAINT IF EXISTS lb_configs_version_key`;
-    await sql`ALTER TABLE lb_configs ADD CONSTRAINT lb_configs_domain_version_key UNIQUE(domain, version)`;
   } catch (e) {
     console.log('[DB] Config migration notice:', e);
   }
