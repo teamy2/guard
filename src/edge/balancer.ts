@@ -2,7 +2,7 @@ import * as Sentry from '@sentry/nextjs';
 import { extractFeatures } from './feature-extractor';
 import { checkRateLimit, getRateLimitHeaders } from './rate-limiter';
 import { selectBackend, createStickyCookie } from './route-selector';
-import { makeDecision, extractToken, validateToken } from '@/bot-guard';
+import { makeDecision, extractToken, validateToken, createTokenCookie } from '@/bot-guard';
 import {
     proxyRequest,
     createBlockResponse,
@@ -109,10 +109,66 @@ export async function handleRequest(
     // Log URL for debugging
     console.log('[Balancer] request URL:', request.url);
     let pathname = '/unknown';
+    let requestUrl: URL;
     try {
-        pathname = new URL(request.url).pathname;
+        requestUrl = new URL(request.url);
+        pathname = requestUrl.pathname;
     } catch (e) {
         console.error('[Balancer] Invalid URL:', request.url, e);
+        return new Response('Invalid URL', { status: 400 });
+    }
+
+    // Check for __challenge query param - handle challenge token setting
+    const challengeToken = requestUrl.searchParams.get('__challenge');
+    if (challengeToken) {
+        try {
+            // Extract features to get IP hash for validation
+            const features = await extractFeatures(request, ipSalt);
+            
+            // Validate the challenge token
+            const tokenResult = await validateToken(challengeToken, features.ipHash, challengeSecret);
+            
+            if (tokenResult.valid) {
+                // Token is valid - set the challenge cookie and redirect to clean URL
+                const isSecure = requestUrl.protocol === 'https:' || process.env.NODE_ENV === 'production';
+                const cookie = createTokenCookie(challengeToken, isSecure);
+                
+                // Create clean URL without __challenge param
+                const cleanUrl = new URL(request.url);
+                cleanUrl.searchParams.delete('__challenge');
+                
+                // Redirect to clean URL with cookie set
+                return new Response(null, {
+                    status: 302,
+                    headers: {
+                        'Location': cleanUrl.toString(),
+                        'Set-Cookie': cookie,
+                    },
+                });
+            } else {
+                // Invalid token - remove param and continue (will likely get challenged again)
+                console.warn('[Balancer] Invalid challenge token:', tokenResult.reason);
+                const cleanUrl = new URL(request.url);
+                cleanUrl.searchParams.delete('__challenge');
+                return new Response(null, {
+                    status: 302,
+                    headers: {
+                        'Location': cleanUrl.toString(),
+                    },
+                });
+            }
+        } catch (error) {
+            console.error('[Balancer] Error processing __challenge param:', error);
+            // On error, remove param and continue
+            const cleanUrl = new URL(request.url);
+            cleanUrl.searchParams.delete('__challenge');
+            return new Response(null, {
+                status: 302,
+                headers: {
+                    'Location': cleanUrl.toString(),
+                },
+            });
+        }
     }
 
     // Start Sentry transaction with full request journey
@@ -402,12 +458,11 @@ export async function handleRequest(
                             return createBlockResponse(features.requestId);
 
                         case 'challenge':
-                            // Use absolute URL for redirect to avoid "Invalid URL" errors in some runtimes
-                            const protocol = features.protocol || 'https';
-                            const host = features.host;
-                            const absoluteChallengeUrl = `${protocol}://${host}${config.challengePageUrl}`;
+                            // Use hardcoded challenge URL for cross-domain support
+                            const challengeUrl = 'https://uottahack8.vercel.app/challenge';
+                            const originalUrl = request.url; // Full original URL including domain and path
 
-                            console.log('[Balancer] Creating challenge response. Absolute URL:', absoluteChallengeUrl);
+                            console.log('[Balancer] Creating challenge response. Original URL:', originalUrl);
 
                             recordMetric({
                                 requestId: features.requestId,
@@ -424,8 +479,8 @@ export async function handleRequest(
 
                             return createChallengeResponse(
                                 features.requestId,
-                                absoluteChallengeUrl,
-                                features.path
+                                challengeUrl,
+                                originalUrl
                             );
 
                         case 'throttle':

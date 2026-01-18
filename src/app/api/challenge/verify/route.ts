@@ -10,7 +10,7 @@ import { extractFeatures } from '@/edge/feature-extractor';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { challengeResponse, returnPath } = body;
+        const { challengeResponse, returnUrl } = body;
 
         // Verify the hCaptcha response
         const hcaptchaSecret = process.env.HCAPTCHA_SECRET_KEY;
@@ -55,28 +55,18 @@ export async function POST(request: NextRequest) {
         const features = await extractFeatures(request, ipSalt);
 
         // Issue proof-of-human token
+        // Use the path from returnUrl for token payload (for validation)
+        const returnUrlObj = new URL(returnUrl || 'https://example.com/');
+        const returnPath = returnUrlObj.pathname;
         const challengeSecret = process.env.CHALLENGE_SECRET || 'default-secret';
-        const token = await issueToken(features.ipHash, returnPath || '/', challengeSecret);
+        const token = await issueToken(features.ipHash, returnPath, challengeSecret);
 
-        // Return JSON response with success status
-        // The client will handle the redirect using Next.js router
-        const response = NextResponse.json(
-            { 
-                success: true,
-                message: 'Challenge verified successfully',
-                returnPath: returnPath || '/',
-            },
-            { status: 200 }
-        );
+        // Redirect to original URL with __challenge query param
+        // The original domain will handle setting the cookie when it processes the __challenge param
+        const redirectUrl = new URL(returnUrl || 'https://example.com/');
+        redirectUrl.searchParams.set('__challenge', token);
 
-        // Set the cookie with proper attributes
-        const isSecure = request.url.startsWith('https') || process.env.NODE_ENV === 'production';
-        response.headers.set(
-            'Set-Cookie',
-            createTokenCookie(token, isSecure)
-        );
-
-        return response;
+        return NextResponse.redirect(redirectUrl.toString());
     } catch (error) {
         console.error('[Challenge] Error:', error);
         return NextResponse.json(

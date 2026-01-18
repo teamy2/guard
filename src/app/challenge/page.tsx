@@ -7,7 +7,7 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 function ChallengeForm() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const returnPath = searchParams.get('return') || '/';
+    const returnUrl = searchParams.get('return') || '/';
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [token, setToken] = useState<string>('');
@@ -29,14 +29,30 @@ function ChallengeForm() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     challengeResponse: token,
-                    returnPath,
+                    returnUrl,
                 }),
                 redirect: 'manual', // Don't follow redirects automatically
             });
 
             if (response.ok) {
-                // Success - cookie is set, now redirect using Next.js router
-                router.push(returnPath);
+                // Check if response is a redirect
+                if (response.status === 302 || response.status === 307) {
+                    const location = response.headers.get('Location');
+                    if (location) {
+                        // Follow the server redirect
+                        window.location.href = location;
+                        return;
+                    }
+                }
+                
+                // Fallback: try to get redirect URL from response body
+                const data = await response.json().catch(() => null);
+                if (data?.redirectUrl) {
+                    window.location.href = data.redirectUrl;
+                } else {
+                    // Last resort: redirect to return URL
+                    window.location.href = returnUrl;
+                }
             } else {
                 // Error response
                 const data = await response.json().catch(() => ({ error: 'Verification failed' }));

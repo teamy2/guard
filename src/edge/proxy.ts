@@ -120,9 +120,9 @@ export function createThrottleResponse(
 export function createChallengeResponse(
     requestId: string,
     challengeUrl: string,
-    originalPath: string
+    originalUrl: string
 ): Response {
-    const redirectUrl = `${challengeUrl}?return=${encodeURIComponent(originalPath)}`;
+    const redirectUrl = `${challengeUrl}?return=${encodeURIComponent(originalUrl)}`;
 
     return new Response(null, {
         status: 302,
