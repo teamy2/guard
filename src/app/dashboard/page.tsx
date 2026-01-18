@@ -59,7 +59,7 @@ export default function DashboardPage() {
 
     // Fetch user domains on mount
     useEffect(() => {
-        fetch('/internal/api/admin/domains')
+        fetch('/api/admin/domains')
             .then(res => res.json())
             .then(data => {
                 const userDomains = data.domains || [];
@@ -100,7 +100,7 @@ export default function DashboardPage() {
         const domainParam = `&domain=${encodeURIComponent(selectedDomain)}`;
         
         // Fetch dashboard stats
-        fetch(`/internal/api/metrics/stats?hours=1${domainParam}`)
+        fetch(`/api/metrics/stats?hours=1${domainParam}`)
             .then(res => res.json())
             .then(data => {
                 setStats({
@@ -120,7 +120,7 @@ export default function DashboardPage() {
             });
 
         // Fetch backend health (global, but filtered by domain's config)
-        fetch('/internal/api/admin/backends')
+        fetch('/api/admin/backends')
             .then(res => res.json())
             .then(data => {
                 const backendList = data.backends || [];
@@ -134,7 +134,7 @@ export default function DashboardPage() {
             .catch(() => { });
 
         // Fetch traffic data
-        fetch(`/internal/api/metrics/traffic?${domainParam.replace('&', '')}`)
+        fetch(`/api/metrics/traffic?${domainParam.replace('&', '')}`)
             .then(res => res.json())
             .then(data => {
                 setTrafficData(data.data || []);
@@ -151,7 +151,7 @@ export default function DashboardPage() {
         
         setCreatingDomain(true);
         try {
-            const res = await fetch('/internal/api/admin/domains', {
+            const res = await fetch('/api/admin/domains', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ domain: newDomain.trim() }),

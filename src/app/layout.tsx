@@ -29,7 +29,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <NeonAuthUIProvider authClient={authClient} redirectTo="/internal/dashboard" social={{ providers: ['github'] }}>
+        <NeonAuthUIProvider authClient={authClient} redirectTo="/dashboard" social={{ providers: ['github'] }}>
           {children}
         </NeonAuthUIProvider>
       </body>

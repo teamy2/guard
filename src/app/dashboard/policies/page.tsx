@@ -88,7 +88,7 @@ export default function PoliciesPage() {
 
     // Fetch user domains on mount
     useEffect(() => {
-        fetch('/internal/api/admin/domains')
+        fetch('/api/admin/domains')
             .then(res => res.json())
             .then(data => {
                 const userDomains = data.domains || [];
@@ -119,7 +119,7 @@ export default function PoliciesPage() {
         setError('');
         try {
             const domainParam = `?domain=${encodeURIComponent(selectedDomain)}`;
-            const res = await fetch(`/internal/api/admin/config${domainParam}`);
+            const res = await fetch(`/api/admin/config${domainParam}`);
 
             if (!res.ok) {
                 if (res.status === 401) {
@@ -166,7 +166,7 @@ export default function PoliciesPage() {
                 updatedAt: new Date().toISOString(),
             };
 
-            const res = await fetch('/internal/api/admin/config', {
+            const res = await fetch('/api/admin/config', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

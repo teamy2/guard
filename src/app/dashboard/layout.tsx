@@ -13,7 +13,7 @@ export default function DashboardLayout({
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16">
                         <div className="flex items-center gap-8">
-                            <Link href="/internal/dashboard" className="flex items-center gap-2">
+                            <Link href="/dashboard" className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                                     <span className="text-primary-foreground font-bold text-sm">LB</span>
                                 </div>
@@ -21,10 +21,10 @@ export default function DashboardLayout({
                             </Link>
 
                             <div className="hidden md:flex items-center gap-1">
-                                <NavLink href="/internal/dashboard">Overview</NavLink>
-                                <NavLink href="/internal/dashboard/bots">Bot Guard</NavLink>
-                                <NavLink href="/internal/dashboard/backends">Backends</NavLink>
-                                <NavLink href="/internal/dashboard/policies">Policies</NavLink>
+                                <NavLink href="/dashboard">Overview</NavLink>
+                                <NavLink href="/dashboard/bots">Bot Guard</NavLink>
+                                <NavLink href="/dashboard/backends">Backends</NavLink>
+                                <NavLink href="/dashboard/policies">Policies</NavLink>
                             </div>
                         </div>
 

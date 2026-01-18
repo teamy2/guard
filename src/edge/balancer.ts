@@ -630,11 +630,11 @@ function recordMetric(
     }
 
     // Construct absolute URL for metrics endpoint
-    let metricsUrl = '/internal/api/metrics/record';
+    let metricsUrl = '/api/metrics/record';
     if (baseUrl) {
         try {
             const url = new URL(baseUrl);
-            metricsUrl = `${url.protocol}//${url.host}/internal/api/metrics/record`;
+            metricsUrl = `${url.protocol}//${url.host}/api/metrics/record`;
         } catch {
             // Fallback to relative URL if parsing fails
         }
@@ -665,20 +665,4 @@ function recordMetric(
         // Silently fail - metrics recording shouldn't break requests
         console.error('[Balancer] Failed to record metric:', error);
     });
-}
-
-/**
- * Check if path should be excluded from load balancer
- */
-export function shouldExcludePath(path: string): boolean {
-    const excludedPatterns = [
-        /^\/_next\//,           // Next.js internal
-        /^\/favicon\.ico$/,     // Favicon
-        /^\/robots\.txt$/,      // Robots
-        /^\/internal/,          // All internal routes (admin, API, cron, health, etc.)
-        /^\/challenge/,         // Challenge page
-        /^\/api\/auth/,         // Auth API routes (should not be load balanced)
-    ];
-
-    return excludedPatterns.some(pattern => pattern.test(path));
 }

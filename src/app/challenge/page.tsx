@@ -24,7 +24,7 @@ function ChallengeForm() {
         setError('');
 
         try {
-            const response = await fetch('/internal/api/challenge/verify', {
+            const response = await fetch('/api/challenge/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

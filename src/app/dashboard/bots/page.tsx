@@ -25,7 +25,7 @@ export default function BotsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('/internal/api/metrics/bots?hours=1')
+        fetch('/api/metrics/bots?hours=1')
             .then(res => res.json())
             .then(data => {
                 setStats(data);
