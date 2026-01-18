@@ -220,10 +220,7 @@ export default function DashboardPage() {
                                         content={
                                             <ChartTooltipContent 
                                                 labelKey="timeLabel"
-                                                formatter={(value, name) => {
-                                                    const label = chartConfig[name as keyof ChartConfig]?.label || name;
-                                                    return [value, label];
-                                                }}
+                                                indicator="dot"
                                             />
                                         }
                                     />
