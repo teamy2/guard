@@ -1,25 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserDomains, assignDomainToUser } from '@/config/storage';
 import * as Sentry from '@sentry/nextjs';
-
-/**
- * Get current user ID from request
- * Note: This is a placeholder - implement proper auth extraction
- */
-async function getCurrentUserId(request: NextRequest): Promise<string | null> {
-    try {
-        const cookieHeader = request.headers.get('cookie');
-        if (!cookieHeader) {
-            return null;
-        }
-        // TODO: Implement proper session extraction using Neon Auth server API
-        const sessionMatch = cookieHeader.match(/(?:session|auth|user)[_\-]?id=([^;]+)/i);
-        return sessionMatch ? sessionMatch[1] : null;
-    } catch (error) {
-        console.error('[Admin] Failed to get user ID:', error);
-        return null;
-    }
-}
+import { getCurrentUserId } from '@/lib/auth/server';
 
 /**
  * GET - List all domains owned by the current user
