@@ -539,6 +539,7 @@ export async function handleRequest(
 
                 // Add sticky cookie if needed
                 const responseHeaders = new Headers(response.headers);
+
                 if (strategy === 'sticky' && stickyConfig) {
                     // Determine if request is secure (HTTPS)
                     const isSecure = new URL(request.url).protocol === 'https:';

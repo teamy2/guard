@@ -21,17 +21,11 @@ export async function proxyRequest(
     // Create new headers, preserving most original headers
     const headers = new Headers(request.headers);
 
-    // Set forwarding headers
-    headers.set('X-Forwarded-Host', request.headers.get('host') || '');
-    headers.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
 
     // Add any additional headers (request ID, trace ID, etc.)
     for (const [key, value] of Object.entries(additionalHeaders)) {
         headers.set(key, value);
     }
-
-    // Don't forward host header - use backend host
-    headers.set('Host', backendUrl.host);
 
     const startTime = Date.now();
 
@@ -40,21 +34,12 @@ export async function proxyRequest(
             method: request.method,
             headers,
             body: request.body,
-            // @ts-expect-error - duplex is required for streaming bodies
-            duplex: 'half',
         });
-
-        const latency = Date.now() - startTime;
-
-        // Create new response with additional headers
-        const responseHeaders = new Headers(response.headers);
-        responseHeaders.set('X-Backend', backend.id);
-        responseHeaders.set('X-Backend-Latency', String(latency));
 
         return new Response(response.body, {
             status: response.status,
             statusText: response.statusText,
-            headers: responseHeaders,
+            headers: response.headers,
         });
     } catch (error) {
         const latency = Date.now() - startTime;
