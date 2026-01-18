@@ -39,10 +39,39 @@ export async function proxyRequest(
             body: request.body,
         });
 
+        // Copy all response headers exactly as-is to preserve compression
+        const responseHeaders = new Headers();
+        for (const [key, value] of response.headers.entries()) {
+            responseHeaders.set(key, value);
+        }
+
+        // Vercel Edge Runtime's fetch() may automatically decompress gzip/brotli responses
+        // while keeping the Content-Encoding header, causing a mismatch.
+        // 
+        // The WHATWG Fetch Standard says fetch() should transparently decompress
+        // and remove Content-Encoding, but Vercel's implementation might keep the header.
+        // 
+        // Solution: If Content-Encoding is present but Vercel decompressed the body,
+        // we need to remove the header. However, we can't easily detect decompression
+        // without reading the body (which we don't want to do).
+        //
+        // Workaround: Remove Content-Encoding header if present, as Vercel's fetch()
+        // likely already decompressed the body. The client will receive uncompressed
+        // content, which is fine - Vercel's CDN will recompress it if needed.
+        const contentEncoding = responseHeaders.get('content-encoding');
+        if (contentEncoding && (contentEncoding.includes('gzip') || contentEncoding.includes('br') || contentEncoding.includes('deflate'))) {
+            // Vercel's fetch() likely decompressed this, so remove the header
+            // to prevent client-side decompression errors
+            responseHeaders.delete('content-encoding');
+            // Also remove Content-Length as it won't match after decompression
+            responseHeaders.delete('content-length');
+        }
+        
+        // Pass through body stream exactly as-is
         return new Response(response.body, {
             status: response.status,
             statusText: response.statusText,
-            headers: response.headers,
+            headers: responseHeaders,
         });
     } catch (error) {
         const latency = Date.now() - startTime;

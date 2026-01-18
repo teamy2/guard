@@ -65,6 +65,10 @@ export async function proxy(request: NextRequest) {
         return balancerMiddleware(request);
     }
 
+    if (path.endsWith('/challenge') || path.startsWith('/api/challenge/')) {
+        return NextResponse.next();
+    }
+
     // Exclude /api/auth/ from load balancing (pass through directly)
     if (path.startsWith('/api/auth/')) {
         return NextResponse.next();
@@ -99,6 +103,6 @@ export async function proxy(request: NextRequest) {
 // Configure which paths the middleware runs on
 export const config = {
     matcher: [
-        '/((?!_next/static|_next/image|/challenge|/api/challenge/).*)',
+        '/((?!_next/static|_next/image).*)',
     ],
 };
