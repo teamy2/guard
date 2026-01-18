@@ -532,7 +532,7 @@ export async function getRecentRequests(limit: number = 50, domain?: string): Pr
 
 /**
  * Get time-bucketed request data for the last 24 hours
- * Buckets requests into 30-minute intervals
+ * Buckets requests into 1-minute intervals
  */
 export async function getTimeBucketedRequests(domain?: string): Promise<Array<{
   time: string;
@@ -555,11 +555,10 @@ export async function getTimeBucketedRequests(domain?: string): Promise<Array<{
   // Get data from the last 24 hours
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  // Query to bucket by 30-minute intervals
+  // Query to bucket by 1-minute intervals
   const result = await sql`
   SELECT
-  DATE_TRUNC('hour', timestamp) +
-    INTERVAL '30 minutes' * FLOOR(EXTRACT(MINUTE FROM timestamp) / 30) as bucket_time,
+  DATE_TRUNC('minute', timestamp) as bucket_time,
       COUNT(*) as total,
       COUNT(*) FILTER(WHERE decision = 'allow') as allow_count,
         COUNT(*) FILTER(WHERE decision = 'block') as block_count,
