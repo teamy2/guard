@@ -224,17 +224,15 @@ export default function DashboardPage() {
                         <SelectTrigger id="domain-select" className="w-[200px]">
                             <SelectValue placeholder={domains.length === 0 ? "No domains" : "Select domain"} />
                         </SelectTrigger>
-                        <SelectContent>
-                            {domains.length === 0 ? (
-                                <SelectItem value="" disabled>No domains available</SelectItem>
-                            ) : (
-                                domains.map(domain => (
+                        {domains.length > 0 && (
+                            <SelectContent>
+                                {domains.map(domain => (
                                     <SelectItem key={domain} value={domain}>
                                         {domain}
                                     </SelectItem>
-                                ))
-                            )}
-                        </SelectContent>
+                                ))}
+                            </SelectContent>
+                        )}
                     </Select>
                     <Button 
                         variant="outline" 

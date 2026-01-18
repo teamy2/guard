@@ -288,21 +288,19 @@ export default function PoliciesPage() {
             <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center gap-2">
                     <Label htmlFor="domain-select" className="text-sm font-medium">Domain:</Label>
-                    <Select value={selectedDomain} onValueChange={setSelectedDomain}>
+                    <Select value={selectedDomain} onValueChange={setSelectedDomain} disabled={domains.length === 0}>
                         <SelectTrigger id="domain-select" className="w-[250px]">
-                            <SelectValue />
+                            <SelectValue placeholder={domains.length === 0 ? "No domains available" : "Select domain"} />
                         </SelectTrigger>
-                        <SelectContent>
-                            {domains.length === 0 ? (
-                                <SelectItem value="" disabled>No domains available</SelectItem>
-                            ) : (
-                                domains.map(domain => (
+                        {domains.length > 0 && (
+                            <SelectContent>
+                                {domains.map(domain => (
                                     <SelectItem key={domain} value={domain}>
                                         {domain}
                                     </SelectItem>
-                                ))
-                            )}
-                        </SelectContent>
+                                ))}
+                            </SelectContent>
+                        )}
                     </Select>
                 </div>
                 <p className="text-sm text-muted-foreground">
