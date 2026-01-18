@@ -61,12 +61,16 @@ export async function POST(request: NextRequest) {
         const challengeSecret = process.env.CHALLENGE_SECRET || 'default-secret';
         const token = await issueToken(features.ipHash, returnPath, challengeSecret);
 
-        // Redirect to original URL with __challenge query param
+        // Build redirect URL with __challenge query param
         // The original domain will handle setting the cookie when it processes the __challenge param
         const redirectUrl = new URL(returnUrl || 'https://example.com/');
         redirectUrl.searchParams.set('__challenge', token);
 
-        return NextResponse.redirect(redirectUrl.toString());
+        // Return JSON with redirect URL instead of server-side redirect
+        return NextResponse.json({
+            success: true,
+            redirectUrl: redirectUrl.toString(),
+        });
     } catch (error) {
         console.error('[Challenge] Error:', error);
         return NextResponse.json(

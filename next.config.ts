@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
     // Instrument server for Sentry
   },
 
+  compress: false,
+
   // Headers for security
   async headers() {
     return [

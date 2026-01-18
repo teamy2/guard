@@ -31,26 +31,15 @@ function ChallengeForm() {
                     challengeResponse: token,
                     returnUrl,
                 }),
-                redirect: 'manual', // Don't follow redirects automatically
             });
 
             if (response.ok) {
-                // Check if response is a redirect
-                if (response.status === 302 || response.status === 307) {
-                    const location = response.headers.get('Location');
-                    if (location) {
-                        // Follow the server redirect
-                        window.location.href = location;
-                        return;
-                    }
-                }
-                
-                // Fallback: try to get redirect URL from response body
-                const data = await response.json().catch(() => null);
-                if (data?.redirectUrl) {
+                const data = await response.json();
+                if (data.redirectUrl) {
+                    // Redirect to the URL returned by the API
                     window.location.href = data.redirectUrl;
                 } else {
-                    // Last resort: redirect to return URL
+                    // Fallback: redirect to return URL
                     window.location.href = returnUrl;
                 }
             } else {
