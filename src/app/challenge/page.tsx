@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
+import { Lock } from 'lucide-react';
 
 function ChallengeForm() {
     const searchParams = useSearchParams();
@@ -60,7 +61,7 @@ function ChallengeForm() {
             <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-8 text-center">
                 {/* Icon */}
                 <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 flex items-center justify-center">
-                    <span className="text-3xl">🔐</span>
+                    <Lock className="w-8 h-8 text-yellow-500" />
                 </div>
 
                 {/* Title */}

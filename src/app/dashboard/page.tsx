@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BarChart3, Shield, Lock, Zap, Search, TrendingUp } from "lucide-react";
 
 interface DashboardStats {
     totalRequests: number;
@@ -320,14 +321,14 @@ export default function DashboardPage() {
                     value={loading ? '...' : formatNumber(stats.totalRequests)}
                     trend=""
                     trendUp={true}
-                    icon="📊"
+                    icon={BarChart3}
                 />
                 <StatCard
                     label="Blocked"
                     value={loading ? '...' : formatNumber(stats.blockedRequests)}
                     trend=""
                     trendUp={false}
-                    icon="🛡️"
+                    icon={Shield}
                     color="red"
                 />
                 <StatCard
@@ -335,7 +336,7 @@ export default function DashboardPage() {
                     value={loading ? '...' : formatNumber(stats.challengedRequests)}
                     trend=""
                     trendUp={true}
-                    icon="🔐"
+                    icon={Lock}
                     color="yellow"
                 />
                 <StatCard
@@ -343,7 +344,7 @@ export default function DashboardPage() {
                     value={loading ? '...' : `${stats.avgLatency}ms`}
                     trend=""
                     trendUp={false}
-                    icon="⚡"
+                    icon={Zap}
                     color="green"
                 />
             </div>
@@ -433,7 +434,9 @@ export default function DashboardPage() {
                             </ChartContainer>
                         ) : (
                             <div className="text-center text-muted-foreground py-8">
-                                <div className="text-4xl mb-2">📊</div>
+                                <div className="flex justify-center mb-2">
+                                    <BarChart3 className="w-12 h-12 text-muted-foreground" />
+                                </div>
                                 <p className="text-sm">No traffic data yet</p>
                                 <p className="text-xs mt-1">Traffic will appear here as requests are processed</p>
                             </div>
@@ -457,7 +460,9 @@ export default function DashboardPage() {
                             ))
                         ) : (
                             <div className="text-center text-muted-foreground py-8">
-                                <div className="text-4xl mb-2">🔍</div>
+                                <div className="flex justify-center mb-2">
+                                    <Search className="w-12 h-12 text-muted-foreground" />
+                                </div>
                                 <p className="text-sm">No backends configured</p>
                                 <p className="text-xs mt-1">Configure backends in the Policies page</p>
                             </div>
@@ -554,14 +559,14 @@ function StatCard({
     value,
     trend,
     trendUp,
-    icon,
+    icon: Icon,
     color = 'blue'
 }: {
     label: string;
     value: string;
     trend: string;
     trendUp: boolean;
-    icon: string;
+    icon: React.ComponentType<{ className?: string }>;
     color?: 'blue' | 'red' | 'yellow' | 'green';
 }) {
     // Simplifying colors to use theme variables or simple classes for now, or keep custom if needed
@@ -574,7 +579,7 @@ function StatCard({
                         <p className="text-sm text-muted-foreground">{label}</p>
                         <p className="text-2xl font-bold mt-1">{value}</p>
                     </div>
-                    <span className="text-2xl">{icon}</span>
+                    <Icon className="w-6 h-6 text-muted-foreground" />
                 </div>
                 {trend && (
                     <div className={`text-sm mt-2 ${trendUp ? 'text-green-500' : 'text-red-500'}`}>

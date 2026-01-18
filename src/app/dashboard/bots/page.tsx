@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, Ban, Lock, Timer, ArrowRight } from "lucide-react";
 
 interface BotStats {
     scoreBuckets: { bucket: string; count: number; percentage: number }[];
@@ -120,11 +121,11 @@ export default function BotsPage() {
                             </div>
                         ) : (
                             <>
-                                <ActionRow label="Allowed" count={stats.actions.allow || 0} icon="✅" />
-                                <ActionRow label="Blocked" count={stats.actions.block || 0} icon="🚫" />
-                                <ActionRow label="Challenged" count={stats.actions.challenge || 0} icon="🔐" />
-                                <ActionRow label="Throttled" count={stats.actions.throttle || 0} icon="⏱️" />
-                                <ActionRow label="Rerouted" count={stats.actions.reroute || 0} icon="↪️" />
+                                <ActionRow label="Allowed" count={stats.actions.allow || 0} icon={CheckCircle2} />
+                                <ActionRow label="Blocked" count={stats.actions.block || 0} icon={Ban} />
+                                <ActionRow label="Challenged" count={stats.actions.challenge || 0} icon={Lock} />
+                                <ActionRow label="Throttled" count={stats.actions.throttle || 0} icon={Timer} />
+                                <ActionRow label="Rerouted" count={stats.actions.reroute || 0} icon={ArrowRight} />
                             </>
                         )}
                     </CardContent>
@@ -244,11 +245,11 @@ function ReasonBar({ rule, count, percentage }: { rule: string; count: number; p
     );
 }
 
-function ActionRow({ label, count, icon }: { label: string; count: number; icon: string }) {
+function ActionRow({ label, count, icon: Icon }: { label: string; count: number; icon: React.ComponentType<{ className?: string }> }) {
     return (
         <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg border">
             <div className="flex items-center gap-2">
-                <span>{icon}</span>
+                <Icon className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm font-medium">{label}</span>
             </div>
             <span className="text-sm text-muted-foreground">{count.toLocaleString()}</span>
