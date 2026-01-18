@@ -23,7 +23,8 @@ interface DashboardStats {
 interface BackendStatus {
     backendId: string;
     healthy: boolean;
-    latencyP95: number;
+    latencyMs: number | null;
+    timedOut: boolean;
 }
 
 interface TrafficDataPoint {
@@ -56,6 +57,7 @@ export default function DashboardPage() {
     const [trafficData, setTrafficData] = useState<TrafficDataPoint[]>([]);
     const [loading, setLoading] = useState(true);
     const [trafficLoading, setTrafficLoading] = useState(true);
+    const [backendsLoading, setBackendsLoading] = useState(true);
 
     // Fetch user domains on mount
     useEffect(() => {
@@ -91,18 +93,34 @@ export default function DashboardPage() {
             setBackends([]);
             setLoading(false);
             setTrafficLoading(false);
+            setBackendsLoading(false);
             return;
         }
 
         setLoading(true);
         setTrafficLoading(true);
+        setBackendsLoading(true);
 
         const domainParam = `&domain=${encodeURIComponent(selectedDomain)}`;
         
         // Fetch dashboard stats
+        console.log('[Dashboard] Fetching stats for domain:', selectedDomain);
         fetch(`/api/metrics/stats?hours=1${domainParam}`)
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                return res.json();
+            })
             .then(data => {
+                console.log('[Dashboard] Stats received:', {
+                    domain: selectedDomain,
+                    totalRequests: data.totalRequests,
+                    allowed: data.allowedRequests,
+                    blocked: data.blockedRequests,
+                    challenged: data.challengedRequests,
+                    throttled: data.throttledRequests,
+                });
                 setStats({
                     totalRequests: data.totalRequests || 0,
                     allowedRequests: data.allowedRequests || 0,
@@ -115,12 +133,22 @@ export default function DashboardPage() {
                 setLoading(false);
             })
             .catch((error) => {
-                console.error('Failed to fetch stats:', error);
+                console.error('[Dashboard] Failed to fetch stats:', error);
+                // Set stats to zero on error to show something
+                setStats({
+                    totalRequests: 0,
+                    allowedRequests: 0,
+                    blockedRequests: 0,
+                    challengedRequests: 0,
+                    avgLatency: 0,
+                    healthyBackends: 0,
+                    totalBackends: 0,
+                });
                 setLoading(false);
             });
 
-        // Fetch backend health (global, but filtered by domain's config)
-        fetch('/api/admin/backends')
+        // Fetch backend health - ping each backend in real-time
+        fetch(`/api/admin/backends/health-check?domain=${encodeURIComponent(selectedDomain)}`)
             .then(res => res.json())
             .then(data => {
                 const backendList = data.backends || [];
@@ -130,8 +158,13 @@ export default function DashboardPage() {
                     healthyBackends: backendList.filter((b: BackendStatus) => b.healthy).length,
                     totalBackends: backendList.length,
                 }));
+                setBackendsLoading(false);
             })
-            .catch(() => { });
+            .catch((error) => {
+                console.error('Failed to fetch backend health:', error);
+                setBackends([]);
+                setBackendsLoading(false);
+            });
 
         // Fetch traffic data
         fetch(`/api/metrics/traffic?${domainParam.replace('&', '')}`)
@@ -414,19 +447,20 @@ export default function DashboardPage() {
                         <CardTitle>Backend Health</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                        {backends.length > 0 ? (
+                        {backendsLoading ? (
+                            <div className="flex items-center justify-center h-32">
+                                <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full" />
+                            </div>
+                        ) : backends.length > 0 ? (
                             backends.map((backend) => (
                                 <BackendRow key={backend.backendId} backend={backend} />
                             ))
                         ) : (
-                            <>
-                                <BackendRow
-                                    backend={{ backendId: 'primary', healthy: true, latencyP95: 42 }}
-                                />
-                                <BackendRow
-                                    backend={{ backendId: 'secondary', healthy: true, latencyP95: 58 }}
-                                />
-                            </>
+                            <div className="text-center text-muted-foreground py-8">
+                                <div className="text-4xl mb-2">🔍</div>
+                                <p className="text-sm">No backends configured</p>
+                                <p className="text-xs mt-1">Configure backends in the Policies page</p>
+                            </div>
                         )}
                     </CardContent>
                 </Card>
@@ -553,6 +587,12 @@ function StatCard({
 }
 
 function BackendRow({ backend }: { backend: BackendStatus }) {
+    const latencyDisplay = backend.timedOut 
+        ? 'Timeout' 
+        : backend.latencyMs !== null 
+            ? `${Math.round(backend.latencyMs)}ms` 
+            : 'N/A';
+
     return (
         <div className="flex items-center justify-between p-3 border rounded-lg">
             <div className="flex items-center gap-3">
@@ -560,7 +600,9 @@ function BackendRow({ backend }: { backend: BackendStatus }) {
                 <span className="font-medium">{backend.backendId}</span>
             </div>
             <div className="flex items-center gap-4">
-                <span className="text-sm text-muted-foreground">p95: {backend.latencyP95}ms</span>
+                <span className={`text-sm ${backend.timedOut ? 'text-red-500' : 'text-muted-foreground'}`}>
+                    {latencyDisplay}
+                </span>
                 <Badge variant={backend.healthy ? "default" : "destructive"} className={backend.healthy ? "bg-green-500 hover:bg-green-600" : ""}>
                     {backend.healthy ? 'Healthy' : 'Unhealthy'}
                 </Badge>

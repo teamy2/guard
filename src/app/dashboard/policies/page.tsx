@@ -264,7 +264,7 @@ export default function PoliciesPage() {
                     <div className="h-6 w-px bg-border mx-1"></div>
 
                     <span className="text-sm text-muted-foreground">
-                        v<code className="bg-muted px-2 py-0.5 rounded">{config.version}</code>
+                        <code className="bg-muted px-2 py-0.5 rounded">v{config.version}</code>
                     </span>
                     <Badge variant={config.status === 'active' ? 'default' : 'secondary'}>
                         {config.status}

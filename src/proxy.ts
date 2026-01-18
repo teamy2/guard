@@ -14,8 +14,10 @@ async function balancerMiddleware(request: NextRequest) {
         // Extract hostname to support multi-tenant configs
         const hostname = request.headers.get('host') || 'localhost';
         // Remove port number if present (e.g. localhost:3000 -> localhost)
-        const domain = hostname.split(':')[0];
+        // Normalize domain (lowercase, trim) for consistent storage and querying
+        const domain = hostname.split(':')[0].toLowerCase().trim();
 
+        console.log('[Middleware] Extracted domain:', domain);
         const config = await loadConfig(domain);
 
         // If no backends configured, pass through

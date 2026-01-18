@@ -118,6 +118,17 @@ export async function handleRequest(
         return new Response('Invalid URL', { status: 400 });
     }
 
+    // Ensure domain is always set - extract from request if not provided
+    if (!domain) {
+        // Try to extract from request URL hostname
+        const hostname = requestUrl.hostname || request.headers.get('host') || 'localhost';
+        domain = hostname.split(':')[0].toLowerCase().trim();
+        console.log('[Balancer] Extracted domain from request:', domain);
+    } else {
+        // Normalize provided domain
+        domain = domain.toLowerCase().trim();
+    }
+
     // Check for __challenge query param - handle challenge token setting
     const challengeToken = requestUrl.searchParams.get('__challenge');
     if (challengeToken) {
@@ -696,6 +707,18 @@ function recordMetric(
         }
     }
 
+    // Ensure domain is set (should already be set, but double-check)
+    const domainToRecord = data.domain || 'unknown';
+    
+    // Log domain occasionally for debugging (1% of requests)
+    if (Math.random() < 0.01) {
+        console.log('[Balancer] Recording metric:', {
+            requestId: data.requestId,
+            decision: data.decision,
+            domain: domainToRecord,
+        });
+    }
+
     // Fire and forget - don't block response
     fetch(metricsUrl, {
         method: 'POST',
@@ -715,7 +738,7 @@ function recordMetric(
             botBucket: data.botBucket,
             botReason: data.botReason,
             statusCode: data.statusCode,
-            domain: data.domain,
+            domain: domainToRecord,
         }),
     }).catch((error) => {
         // Silently fail - metrics recording shouldn't break requests

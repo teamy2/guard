@@ -235,6 +235,21 @@ export async function recordRequestMetric(metric: RequestMetric): Promise<void> 
       ? (metric.timestamp instanceof Date ? metric.timestamp.toISOString() : metric.timestamp)
       : new Date().toISOString();
 
+    // Normalize domain (lowercase, trim) for consistent storage and querying
+    const normalizedDomain = metric.domain 
+      ? metric.domain.toLowerCase().trim() 
+      : 'unknown';
+
+    // Log domain for debugging (only log occasionally to avoid spam)
+    if (Math.random() < 0.01) { // Log 1% of requests
+      console.log('[Metrics] Recording metric:', {
+        requestId: metric.requestId,
+        decision: metric.decision,
+        domain: normalizedDomain,
+        originalDomain: metric.domain,
+      });
+    }
+
     await sql`
       INSERT INTO request_metrics(
       request_id,
@@ -262,7 +277,7 @@ export async function recordRequestMetric(metric: RequestMetric): Promise<void> 
     ${metric.botBucket || null},
     ${metric.botReason || null},
     ${metric.statusCode || null},
-    ${metric.domain || 'unknown'}
+    ${normalizedDomain}
   )
     `;
   } catch (error) {
@@ -299,6 +314,11 @@ export async function getDashboardStats(hours: number = 1, domain?: string): Pro
     };
   }
 
+  // Normalize domain (lowercase, trim) for consistent querying
+  const normalizedDomain = domain.toLowerCase().trim();
+
+  console.log('[Storage] getDashboardStats: Querying for domain:', normalizedDomain, 'since:', since);
+
   // Get total counts by decision
   const decisionCounts = await sql`
   SELECT
@@ -307,7 +327,7 @@ export async function getDashboardStats(hours: number = 1, domain?: string): Pro
     AVG(latency_ms) as avg_latency
     FROM request_metrics
     WHERE timestamp >= ${since} 
-    AND domain = ${domain}
+    AND domain = ${normalizedDomain}
     GROUP BY decision
     `;
 
@@ -318,8 +338,10 @@ export async function getDashboardStats(hours: number = 1, domain?: string): Pro
     AVG(latency_ms) as avg_latency
     FROM request_metrics
     WHERE timestamp >= ${since}
-    AND domain = ${domain}
+    AND domain = ${normalizedDomain}
   `;
+
+  console.log('[Storage] getDashboardStats: Found', decisionCounts.rows.length, 'decision types, total:', overall.rows[0]?.total || 0);
 
   const total = overall.rows[0]?.total || 0;
   const avgLatency = overall.rows[0]?.avg_latency || 0;
@@ -380,6 +402,9 @@ export async function getBotStats(hours: number = 1, domain?: string): Promise<{
     };
   }
 
+  // Normalize domain (lowercase, trim) for consistent querying
+  const normalizedDomain = domain.toLowerCase().trim();
+
   // Get counts by bot bucket
   const bucketCounts = await sql`
   SELECT
@@ -388,7 +413,7 @@ export async function getBotStats(hours: number = 1, domain?: string): Promise<{
     FROM request_metrics
     WHERE timestamp >= ${since} 
     AND bot_bucket IS NOT NULL
-    AND domain = ${domain}
+    AND domain = ${normalizedDomain}
     GROUP BY bot_bucket
     `;
 
@@ -408,7 +433,7 @@ export async function getBotStats(hours: number = 1, domain?: string): Promise<{
     FROM request_metrics
     WHERE timestamp >= ${since} 
     AND decision IN('block', 'challenge', 'throttle', 'allow')
-    AND domain = ${domain}
+    AND domain = ${normalizedDomain}
     GROUP BY decision
     `;
 
@@ -426,7 +451,7 @@ export async function getBotStats(hours: number = 1, domain?: string): Promise<{
     WHERE timestamp >= ${since} 
       AND bot_reason IS NOT NULL
       AND bot_reason != ''
-      AND domain = ${domain}
+      AND domain = ${normalizedDomain}
     GROUP BY bot_reason
     ORDER BY count DESC
     LIMIT 10
@@ -468,6 +493,9 @@ export async function getRecentRequests(limit: number = 50, domain?: string): Pr
     return [];
   }
 
+  // Normalize domain (lowercase, trim) for consistent querying
+  const normalizedDomain = domain.toLowerCase().trim();
+
   const result = await sql`
   SELECT
   request_id,
@@ -482,7 +510,7 @@ export async function getRecentRequests(limit: number = 50, domain?: string): Pr
     bot_reason,
     status_code
     FROM request_metrics
-    WHERE domain = ${domain}
+    WHERE domain = ${normalizedDomain}
     ORDER BY timestamp DESC
     LIMIT ${limit}
   `;
@@ -516,8 +544,13 @@ export async function getTimeBucketedRequests(domain?: string): Promise<Array<{
 }>> {
   // Require domain - no global queries
   if (!domain) {
+    console.log('[Storage] getTimeBucketedRequests: No domain provided, returning empty array');
     return [];
   }
+
+  // Normalize domain (lowercase, trim) for consistent querying
+  const normalizedDomain = domain.toLowerCase().trim();
+  console.log('[Storage] getTimeBucketedRequests: Querying for domain:', normalizedDomain);
 
   // Get data from the last 24 hours
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -534,10 +567,12 @@ export async function getTimeBucketedRequests(domain?: string): Promise<Array<{
             COUNT(*) FILTER(WHERE decision = 'throttle') as throttle_count
     FROM request_metrics
     WHERE timestamp >= ${since}
-    AND domain = ${domain}
+    AND domain = ${normalizedDomain}
     GROUP BY bucket_time
     ORDER BY bucket_time ASC
     `;
+
+  console.log('[Storage] getTimeBucketedRequests: Found', result.rows.length, 'buckets for domain:', normalizedDomain);
 
   return result.rows.map(row => ({
     time: new Date(row.bucket_time as Date).toISOString(),
