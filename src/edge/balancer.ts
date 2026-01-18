@@ -190,6 +190,14 @@ export async function handleRequest(
                 const botConfig = policy?.botGuard ?? config.defaultBotGuard;
                 const strategy = policy?.strategy ?? config.defaultStrategy;
                 const backendIds = policy?.backendIds ?? config.backends.map(b => b.id);
+                
+                // Default stickyConfig if strategy is sticky but config is missing
+                const stickyConfig = policy?.stickyConfig ?? (strategy === 'sticky' ? {
+                    type: 'cookie' as const,
+                    cookieName: '_lb_sticky',
+                    headerName: 'X-Sticky-Backend',
+                    ttlSeconds: 3600,
+                } : undefined);
 
                 // Get backends for this policy
                 const backends = config.backends.filter(b => backendIds.includes(b.id));
@@ -459,7 +467,7 @@ export async function handleRequest(
                         policy?.id ?? 'default',
                         features,
                         request,
-                        policy?.stickyConfig
+                        stickyConfig
                     )
                 );
 
@@ -526,10 +534,12 @@ export async function handleRequest(
 
                 // Add sticky cookie if needed
                 const responseHeaders = new Headers(response.headers);
-                if (strategy === 'sticky' && policy?.stickyConfig) {
+                if (strategy === 'sticky' && stickyConfig) {
+                    // Determine if request is secure (HTTPS)
+                    const isSecure = new URL(request.url).protocol === 'https:';
                     responseHeaders.append(
                         'Set-Cookie',
-                        createStickyCookie(lbResult.backend.id, policy.stickyConfig)
+                        createStickyCookie(lbResult.backend.id, stickyConfig, isSecure)
                     );
                 }
 
