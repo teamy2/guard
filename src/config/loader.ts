@@ -23,7 +23,7 @@ const redis = createRedisClient();
 
 /**
  * Configuration loader with caching for Edge runtime
- * Uses Vercel KV for fast access at the edge
+ * Uses Upstash Redis (via REST API) for fast access at the edge
  */
 export async function loadConfig(domain: string = 'localhost'): Promise<GlobalConfig> {
     try {

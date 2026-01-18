@@ -56,8 +56,9 @@ function generateKey(
 }
 
 /**
- * Sliding window rate limiter using Vercel KV / Upstash Redis
+ * Sliding window rate limiter using Upstash Redis (via REST API)
  * Uses a simple counter with TTL approach for efficiency
+ * Compatible with Vercel KV (which uses the same API)
  */
 export async function checkRateLimit(
     features: RequestFeatures,
