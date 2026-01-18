@@ -61,17 +61,17 @@ export async function proxy(request: NextRequest) {
 
     const path = new URL(request.url).pathname;
 
+    // Allow challenge-related APIs to bypass auth (users need to access these without being logged in)
+    if (path.startsWith('/api/challenge/') || path.endsWith('/challenge')) {
+        return NextResponse.next();
+    }
+
     if (request.headers.get('host') !== 'uottahack8.vercel.app') {
         return balancerMiddleware(request);
     }
 
     // Exclude /api/auth/ from load balancing (pass through directly)
     if (path.startsWith('/api/auth/')) {
-        return NextResponse.next();
-    }
-
-    // Allow challenge-related APIs to bypass auth (users need to access these without being logged in)
-    if (path.startsWith('/api/challenge/')) {
         return NextResponse.next();
     }
 
