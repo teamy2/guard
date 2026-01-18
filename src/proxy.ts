@@ -61,11 +61,6 @@ export async function proxy(request: NextRequest) {
 
     const path = new URL(request.url).pathname;
 
-    // Allow challenge-related APIs to bypass auth (users need to access these without being logged in)
-    if (path.startsWith('/api/challenge/') || path.endsWith('/challenge')) {
-        return NextResponse.next();
-    }
-
     if (request.headers.get('host') !== 'uottahack8.vercel.app') {
         return balancerMiddleware(request);
     }
@@ -103,5 +98,7 @@ export async function proxy(request: NextRequest) {
 
 // Configure which paths the middleware runs on
 export const config = {
-
+    matcher: [
+        '/((?!_next/static|_next/image|/challenge|/api/challenge/).*)',
+    ],
 };

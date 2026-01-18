@@ -27,6 +27,9 @@ export async function proxyRequest(
         headers.set(key, value);
     }
 
+    // Don't forward host header - use backend host
+    headers.set('Host', backendUrl.host);
+
     const startTime = Date.now();
 
     try {
