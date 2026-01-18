@@ -156,6 +156,9 @@ export const GlobalConfigSchema = z.object({
 
     // Challenge page URL
     challengePageUrl: z.string().default('/challenge'),
+
+    // Domain (Multi-tenant support)
+    domain: z.string().optional(),
 });
 
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>;

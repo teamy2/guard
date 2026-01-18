@@ -18,7 +18,12 @@ async function balancerMiddleware(request: NextRequest) {
 
     try {
         // Load configuration (cached in KV)
-        const config = await loadConfig();
+        // Extract hostname to support multi-tenant configs
+        const hostname = request.headers.get('host') || 'localhost';
+        // Remove port number if present (e.g. localhost:3000 -> localhost)
+        const domain = hostname.split(':')[0];
+
+        const config = await loadConfig(domain);
 
         // If no backends configured, pass through
         if (config.backends.length === 0) {

@@ -12,10 +12,11 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const hours = parseInt(searchParams.get('hours') || '1', 10);
+    const domain = searchParams.get('domain') || undefined;
 
     const [botStats, config] = await Promise.all([
-      getBotStats(hours),
-      getActiveConfig(),
+      getBotStats(hours, domain),
+      getActiveConfig(domain),
     ]);
 
     // Get bot guard configuration

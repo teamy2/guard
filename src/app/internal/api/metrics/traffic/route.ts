@@ -9,7 +9,10 @@ import { getTimeBucketedRequests } from '@/config/storage';
  */
 export async function GET(request: NextRequest) {
   try {
-    const data = await getTimeBucketedRequests();
+    const searchParams = request.nextUrl.searchParams;
+    const domain = searchParams.get('domain') || undefined;
+
+    const data = await getTimeBucketedRequests(domain);
 
     return NextResponse.json({
       data,

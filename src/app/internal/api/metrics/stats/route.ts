@@ -11,10 +11,11 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const hours = parseInt(searchParams.get('hours') || '1', 10);
+    const domain = searchParams.get('domain') || undefined;
 
     const [dashboardStats, botStats] = await Promise.all([
-      getDashboardStats(hours),
-      getBotStats(hours),
+      getDashboardStats(hours, domain),
+      getBotStats(hours, domain),
     ]);
 
     return NextResponse.json({

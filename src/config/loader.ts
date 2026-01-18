@@ -2,8 +2,11 @@ import { Redis } from '@upstash/redis';
 import type { GlobalConfig } from './schema';
 import { getActiveConfig as getActiveConfigFromDB } from './storage';
 
-const CONFIG_CACHE_KEY = 'lb:config:active';
 const CONFIG_CACHE_TTL = 60; // 1 minute cache
+
+function getConfigCacheKey(domain: string): string {
+    return `lb:config:${domain}`;
+}
 
 // Create Redis client safely
 function createRedisClient() {
@@ -22,14 +25,15 @@ const redis = createRedisClient();
  * Configuration loader with caching for Edge runtime
  * Uses Vercel KV for fast access at the edge
  */
-export async function loadConfig(): Promise<GlobalConfig> {
+export async function loadConfig(domain: string = 'localhost'): Promise<GlobalConfig> {
     try {
         let cached: GlobalConfig | null = null;
+        const cacheKey = getConfigCacheKey(domain);
 
         // Try to get from KV cache first if available
         if (redis) {
             try {
-                cached = await redis.get<GlobalConfig>(CONFIG_CACHE_KEY);
+                cached = await redis.get<GlobalConfig>(cacheKey);
             } catch (e) {
                 console.warn('[ConfigLoader] KV cache error:', e);
             }
@@ -40,12 +44,12 @@ export async function loadConfig(): Promise<GlobalConfig> {
         }
 
         // Load from database
-        const config = await getActiveConfigFromDB();
+        const config = await getActiveConfigFromDB(domain);
 
         // Cache in KV for fast edge access
         if (redis) {
             try {
-                await redis.set(CONFIG_CACHE_KEY, config, { ex: CONFIG_CACHE_TTL });
+                await redis.set(cacheKey, config, { ex: CONFIG_CACHE_TTL });
             } catch (e) {
                 console.warn('[ConfigLoader] Failed to cache config:', e);
             }
@@ -89,18 +93,18 @@ export async function loadConfig(): Promise<GlobalConfig> {
 /**
  * Invalidate the config cache (called after admin updates)
  */
-export async function invalidateConfigCache(): Promise<void> {
+export async function invalidateConfigCache(domain: string = 'localhost'): Promise<void> {
     if (redis) {
-        await redis.del(CONFIG_CACHE_KEY);
+        await redis.del(getConfigCacheKey(domain));
     }
 }
 
 /**
  * Warm the config cache (called on deploy or cron)
  */
-export async function warmConfigCache(): Promise<void> {
-    const config = await getActiveConfigFromDB();
+export async function warmConfigCache(domain: string = 'localhost'): Promise<void> {
+    const config = await getActiveConfigFromDB(domain);
     if (redis) {
-        await redis.set(CONFIG_CACHE_KEY, config, { ex: CONFIG_CACHE_TTL });
+        await redis.set(getConfigCacheKey(domain), config, { ex: CONFIG_CACHE_TTL });
     }
 }

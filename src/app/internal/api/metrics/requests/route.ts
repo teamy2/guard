@@ -11,8 +11,9 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '50', 10);
+    const domain = searchParams.get('domain') || undefined;
 
-    const requests = await getRecentRequests(limit);
+    const requests = await getRecentRequests(limit, domain);
 
     return NextResponse.json({
       requests,
