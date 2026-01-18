@@ -32,7 +32,7 @@ async function balancerMiddleware(request: NextRequest) {
         }
 
         // Process through load balancer
-        const response = await handleRequest(request, config);
+        const response = await handleRequest(request, config, domain);
 
         return response;
     } catch (error) {

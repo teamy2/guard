@@ -97,7 +97,8 @@ function matchPath(path: string, pattern: string): boolean {
  */
 export async function handleRequest(
     request: Request,
-    config: GlobalConfig
+    config: GlobalConfig,
+    domain?: string
 ): Promise<Response> {
     const startTime = Date.now();
     const ipSalt = process.env.IP_HASH_SALT || 'default-salt';
@@ -265,6 +266,7 @@ export async function handleRequest(
                         method: features.method,
                         latencyMs: latency,
                         statusCode: 429,
+                        domain,
                     }, request.url);
 
                     return createThrottleResponse(
@@ -395,6 +397,7 @@ export async function handleRequest(
                                 botBucket: botResult.bucket,
                                 botReason: topTriggeredReason,
                                 statusCode: 403,
+                                domain,
                             }, request.url);
                             return createBlockResponse(features.requestId);
 
@@ -416,6 +419,7 @@ export async function handleRequest(
                                 botBucket: botResult.bucket,
                                 botReason: topTriggeredReason,
                                 statusCode: 302,
+                                domain,
                             }, request.url);
 
                             return createChallengeResponse(
@@ -436,6 +440,7 @@ export async function handleRequest(
                                 botBucket: botResult.bucket,
                                 botReason: topTriggeredReason,
                                 statusCode: 429,
+                                domain,
                             }, request.url);
                             return createThrottleResponse(features.requestId, 30, 0);
 
@@ -567,6 +572,7 @@ export async function handleRequest(
                     botBucket: botResult?.bucket,
                     botReason: topTriggeredReasonForAllow,
                     statusCode: response.status,
+                    domain,
                 }, request.url);
 
                 return new Response(response.body, {
@@ -612,6 +618,7 @@ function recordMetric(
         botBucket?: 'low' | 'medium' | 'high';
         botReason?: string; // Top triggered reason
         statusCode?: number;
+        domain?: string;
     },
     baseUrl?: string
 ): void {
@@ -652,6 +659,7 @@ function recordMetric(
             botBucket: data.botBucket,
             botReason: data.botReason,
             statusCode: data.statusCode,
+            domain: data.domain,
         }),
     }).catch((error) => {
         // Silently fail - metrics recording shouldn't break requests

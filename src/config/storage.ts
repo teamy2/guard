@@ -80,31 +80,33 @@ export async function saveConfig(config: GlobalConfig): Promise<void> {
 /**
  * Activate a draft configuration
  */
-export async function activateConfig(version: string): Promise<void> {
-  // Deactivate all other configs
+export async function activateConfig(version: string, domain: string = 'default'): Promise<void> {
+  // Deactivate all other configs for this domain
   await sql`
-    UPDATE lb_configs SET status = 'draft' WHERE status = 'active'
+    UPDATE lb_configs SET status = 'draft' WHERE status = 'active' AND domain = ${domain}
     `;
 
-  // Activate the specified version
+  // Activate the specified version for this domain
   await sql`
     UPDATE lb_configs SET status = 'active', updated_at = NOW()
-    WHERE version = ${version}
+    WHERE version = ${version} AND domain = ${domain}
   `;
 }
 
 /**
- * Get all config versions
+ * Get all config versions for a domain
  */
-export async function listConfigs(): Promise<Array<{ version: string; status: string; updatedAt: string }>> {
+export async function listConfigs(domain?: string): Promise<Array<{ version: string; status: string; updatedAt: string; domain: string }>> {
+  const domainParam = domain || null;
   const result = await sql`
-    SELECT version, status, updated_at as "updatedAt"
+    SELECT version, status, updated_at as "updatedAt", domain
     FROM lb_configs
+    WHERE (${domainParam}::text IS NULL OR domain = ${domainParam})
     ORDER BY updated_at DESC
     LIMIT 50
     `;
 
-  return result.rows as Array<{ version: string; status: string; updatedAt: string }>;
+  return result.rows as Array<{ version: string; status: string; updatedAt: string; domain: string }>;
 }
 
 /**
@@ -241,7 +243,8 @@ export async function recordRequestMetric(metric: RequestMetric): Promise<void> 
       bot_score,
       bot_bucket,
       bot_reason,
-      status_code
+      status_code,
+      domain
     )
   VALUES(
     ${metric.requestId},
@@ -253,7 +256,6 @@ export async function recordRequestMetric(metric: RequestMetric): Promise<void> 
     ${metric.latencyMs || null},
     ${metric.botScore || null},
     ${metric.botBucket || null},
-    ${metric.botReason || null},
     ${metric.botReason || null},
     ${metric.statusCode || null},
     ${metric.domain || 'unknown'}
@@ -568,6 +570,27 @@ export async function initializeDatabase(): Promise<void> {
   await sql`
     CREATE INDEX IF NOT EXISTS idx_lb_configs_status ON lb_configs(status)
     `;
+  
+  // Create index on domain for faster lookups
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_lb_configs_domain ON lb_configs(domain)
+    `;
+
+  // Create user-domain ownership table (for multi-tenant support)
+  await sql`
+    CREATE TABLE IF NOT EXISTS domain_ownership(
+      id SERIAL PRIMARY KEY,
+      domain VARCHAR(255) NOT NULL,
+      user_id VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      UNIQUE(domain, user_id)
+    )
+  `;
+
+  // Create index on user_id for faster lookups
+  await sql`
+    CREATE INDEX IF NOT EXISTS idx_domain_ownership_user_id ON domain_ownership(user_id)
+    `;
 
   // Create request metrics table
   await sql`
@@ -583,7 +606,6 @@ export async function initializeDatabase(): Promise<void> {
       bot_score REAL,
       bot_bucket VARCHAR(20),
       bot_reason VARCHAR(100),
-      status_code INTEGER,
       status_code INTEGER,
       domain VARCHAR(255),
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -609,4 +631,55 @@ export async function initializeDatabase(): Promise<void> {
     `;
 
   console.log('[DB] Database initialized');
+}
+
+// ===========================================
+// DOMAIN OWNERSHIP MANAGEMENT
+// ===========================================
+
+/**
+ * Assign domain ownership to a user
+ */
+export async function assignDomainToUser(domain: string, userId: string): Promise<void> {
+  await sql`
+    INSERT INTO domain_ownership(domain, user_id)
+    VALUES(${domain}, ${userId})
+    ON CONFLICT(domain, user_id) DO NOTHING
+  `;
+}
+
+/**
+ * Check if a user owns a domain
+ */
+export async function userOwnsDomain(domain: string, userId: string): Promise<boolean> {
+  const result = await sql`
+    SELECT 1 FROM domain_ownership
+    WHERE domain = ${domain} AND user_id = ${userId}
+    LIMIT 1
+  `;
+  return result.rows.length > 0;
+}
+
+/**
+ * Get all domains owned by a user
+ */
+export async function getUserDomains(userId: string): Promise<string[]> {
+  const result = await sql`
+    SELECT domain FROM domain_ownership
+    WHERE user_id = ${userId}
+    ORDER BY created_at DESC
+  `;
+  return result.rows.map(row => row.domain as string);
+}
+
+/**
+ * Remove domain ownership (admin function)
+ */
+export async function removeDomainOwnership(domain: string, userId: string): Promise<boolean> {
+  const result = await sql`
+    DELETE FROM domain_ownership
+    WHERE domain = ${domain} AND user_id = ${userId}
+    RETURNING id
+  `;
+  return result.rows.length > 0;
 }
