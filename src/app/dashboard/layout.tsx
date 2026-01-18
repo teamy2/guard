@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
+import { Shield } from "lucide-react";
 
 export default function DashboardLayout({
     children,
@@ -15,9 +16,9 @@ export default function DashboardLayout({
                         <div className="flex items-center gap-8">
                             <Link href="/dashboard" className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                                    <span className="text-primary-foreground font-bold text-sm">LB</span>
+                                    <Shield className="w-5 h-5 text-primary-foreground" />
                                 </div>
-                                <span className="font-semibold text-lg">Edge Balancer</span>
+                                <span className="font-semibold text-lg">The Guard</span>
                             </Link>
 
                             <div className="hidden md:flex items-center gap-1">
