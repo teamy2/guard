@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { CheckCircle2, Ban, Lock, Timer, ArrowRight } from "lucide-react";
 
 interface BotStats {
@@ -18,6 +22,12 @@ interface BotStats {
 }
 
 export default function BotsPage() {
+    const [selectedDomain, setSelectedDomain] = useState<string>('');
+    const [domains, setDomains] = useState<string[]>([]);
+    const [showCreateDomain, setShowCreateDomain] = useState(false);
+    const [newDomain, setNewDomain] = useState('');
+    const [creatingDomain, setCreatingDomain] = useState(false);
+
     const [stats, setStats] = useState<BotStats>({
         scoreBuckets: [],
         topReasons: [],
@@ -25,8 +35,41 @@ export default function BotsPage() {
     });
     const [loading, setLoading] = useState(true);
 
+    // Fetch user domains on mount
     useEffect(() => {
-        fetch('/api/metrics/bots?hours=1')
+        fetch('/api/admin/domains')
+            .then(res => res.json())
+            .then(data => {
+                const userDomains = data.domains || [];
+                setDomains(userDomains);
+                // Auto-select first domain if available
+                if (userDomains.length > 0 && !selectedDomain) {
+                    setSelectedDomain(userDomains[0]);
+                }
+            })
+            .catch(() => {
+                setDomains([]);
+            });
+    }, []);
+
+    // Fetch data when domain changes
+    useEffect(() => {
+        if (!selectedDomain) {
+            // No domain selected, show empty state
+            setStats({
+                scoreBuckets: [],
+                topReasons: [],
+                actions: {},
+            });
+            setLoading(false);
+            return;
+        }
+
+        setLoading(true);
+
+        const domainParam = `&domain=${encodeURIComponent(selectedDomain)}`;
+        
+        fetch(`/api/metrics/bots?hours=1${domainParam}`)
             .then(res => res.json())
             .then(data => {
                 setStats(data);
@@ -34,9 +77,43 @@ export default function BotsPage() {
             })
             .catch((error) => {
                 console.error('Failed to fetch bot stats:', error);
+                setStats({
+                    scoreBuckets: [],
+                    topReasons: [],
+                    actions: {},
+                });
                 setLoading(false);
             });
-    }, []);
+    }, [selectedDomain]);
+
+    const handleCreateDomain = async () => {
+        if (!newDomain.trim()) return;
+        
+        setCreatingDomain(true);
+        try {
+            const res = await fetch('/api/admin/domains', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain: newDomain.trim() }),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setDomains(prev => [...prev, data.domain]);
+                setSelectedDomain(data.domain);
+                setNewDomain('');
+                setShowCreateDomain(false);
+            } else {
+                const error = await res.json();
+                alert(error.error || 'Failed to create domain');
+            }
+        } catch (error) {
+            console.error('Failed to create domain:', error);
+            alert('Failed to create domain');
+        } finally {
+            setCreatingDomain(false);
+        }
+    };
 
     // Map bucket names to display labels
     const bucketLabels: Record<string, { label: string; score: string; color: 'green' | 'yellow' | 'red' }> = {
@@ -51,12 +128,90 @@ export default function BotsPage() {
     return (
         <div className="space-y-8">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Bot Guard</h1>
-                <p className="text-muted-foreground mt-1">Bot detection metrics and scoring analysis</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Bot Guard</h1>
+                    <p className="text-muted-foreground mt-1">Bot detection metrics and scoring analysis</p>
+                </div>
+                
+                {/* Domain Selector */}
+                <div className="flex items-center gap-2">
+                    <Label htmlFor="domain-select" className="text-sm">Domain:</Label>
+                    <Select value={selectedDomain} onValueChange={setSelectedDomain} disabled={domains.length === 0}>
+                        <SelectTrigger id="domain-select" className="w-[200px]">
+                            <SelectValue placeholder={domains.length === 0 ? "No domains" : "Select domain"} />
+                        </SelectTrigger>
+                        {domains.length > 0 && (
+                            <SelectContent>
+                                {domains.map(domain => (
+                                    <SelectItem key={domain} value={domain}>
+                                        {domain}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        )}
+                    </Select>
+                    <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowCreateDomain(!showCreateDomain)}
+                    >
+                        {showCreateDomain ? 'Cancel' : '+ New Domain'}
+                    </Button>
+                </div>
             </div>
 
-            {/* Score Distribution */}
+            {/* Create Domain Form */}
+            {showCreateDomain && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Create New Domain</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-end gap-2">
+                            <div className="flex-1">
+                                <Label htmlFor="new-domain">Domain Name</Label>
+                                <Input
+                                    id="new-domain"
+                                    placeholder="api.example.com"
+                                    value={newDomain}
+                                    onChange={(e) => setNewDomain(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleCreateDomain();
+                                        }
+                                    }}
+                                    disabled={creatingDomain}
+                                />
+                            </div>
+                            <Button 
+                                onClick={handleCreateDomain}
+                                disabled={creatingDomain || !newDomain.trim()}
+                            >
+                                {creatingDomain ? 'Creating...' : 'Create'}
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Empty State */}
+            {!selectedDomain && !loading && (
+                <Card>
+                    <CardContent className="p-12 text-center">
+                        <p className="text-muted-foreground">
+                            {domains.length === 0 
+                                ? 'No domains configured. Create a domain to view bot metrics.'
+                                : 'Please select a domain to view bot metrics.'}
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Main Content - Only show when domain is selected */}
+            {selectedDomain && (
+                <>
+                    {/* Score Distribution */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {loading ? (
                     <>
@@ -174,23 +329,25 @@ export default function BotsPage() {
                 </Card>
             </div>
 
-            {/* Sentry Link */}
-            <a
-                href="https://sentry.io/issues/?query=tag%3Amodule%3Abot-guard"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block"
-            >
-                <Card className="hover:bg-muted/50 transition-colors border-primary/20 bg-primary/5">
-                    <CardContent className="p-6 flex items-center justify-between">
-                        <div>
-                            <h3 className="font-semibold text-primary">View Bot Guard Issues in Sentry</h3>
-                            <p className="text-sm text-muted-foreground mt-1">See errors and exceptions related to bot detection</p>
-                        </div>
-                        <span className="text-2xl text-primary">→</span>
-                    </CardContent>
-                </Card>
-            </a>
+                    {/* Sentry Link */}
+                    <a
+                        href="https://sentry.io/issues/?query=tag%3Amodule%3Abot-guard"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block"
+                    >
+                        <Card className="hover:bg-muted/50 transition-colors border-primary/20 bg-primary/5">
+                            <CardContent className="p-6 flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-semibold text-primary">View Bot Guard Issues in Sentry</h3>
+                                    <p className="text-sm text-muted-foreground mt-1">See errors and exceptions related to bot detection</p>
+                                </div>
+                                <span className="text-2xl text-primary">→</span>
+                            </CardContent>
+                        </Card>
+                    </a>
+                </>
+            )}
         </div>
     );
 }
