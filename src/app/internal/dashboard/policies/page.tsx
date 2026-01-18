@@ -460,7 +460,7 @@ function BuilderTab({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <InputWrapper label="Domain">
                             <Input
-                                value={config.domain || selectedDomain || 'Not set'}
+                                value={config.domain || 'Not set'}
                                 disabled
                                 className="bg-muted"
                             />
