@@ -103,7 +103,5 @@ export async function proxy(request: NextRequest) {
 
 // Configure which paths the middleware runs on
 export const config = {
-    matcher: [
-        '/*',
-    ],
+
 };
