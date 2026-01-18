@@ -697,15 +697,7 @@ function recordMetric(
     }
 
     // Construct absolute URL for metrics endpoint
-    let metricsUrl = '/api/metrics/record';
-    if (baseUrl) {
-        try {
-            const url = new URL(baseUrl);
-            metricsUrl = `${url.protocol}//${url.host}/api/metrics/record`;
-        } catch {
-            // Fallback to relative URL if parsing fails
-        }
-    }
+    const metricsUrl = 'https://uottahack8.vercel.app/api/metrics/record';
 
     // Ensure domain is set (should already be set, but double-check)
     const domainToRecord = data.domain || 'unknown';
