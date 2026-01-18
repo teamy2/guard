@@ -411,13 +411,6 @@ export default function DashboardPage() {
                                     />
                                     <Area
                                         type="monotone"
-                                        dataKey="block"
-                                        stackId="1"
-                                        stroke="var(--color-block)"
-                                        fill="url(#fillBlock)"
-                                    />
-                                    <Area
-                                        type="monotone"
                                         dataKey="challenge"
                                         stackId="1"
                                         stroke="var(--color-challenge)"
@@ -429,6 +422,13 @@ export default function DashboardPage() {
                                         stackId="1"
                                         stroke="var(--color-throttle)"
                                         fill="url(#fillThrottle)"
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="block"
+                                        stackId="1"
+                                        stroke="var(--color-block)"
+                                        fill="url(#fillBlock)"
                                     />
                                 </AreaChart>
                             </ChartContainer>
